@@ -28,12 +28,12 @@ const (
 	KlineMinute15 KlineCategory = 1
 	KlineMinute30 KlineCategory = 2
 	KlineMinute60 KlineCategory = 3
-	KlineDay      KlineCategory = 9
+	KlineDay      KlineCategory = 4
 	KlineWeek     KlineCategory = 5
 	KlineMonth    KlineCategory = 6
-	KlineMinute1  KlineCategory = 8
-	KlineMinute3  KlineCategory = 11
-	KlineSeason   KlineCategory = 13
-	KlineYear     KlineCategory = 11
-	KlineYearAlt  KlineCategory = 12
+	KlineMinute1  KlineCategory = 7
+	KlineMinute3  KlineCategory = 8
+	KlineYear     KlineCategory = 9
+	KlineSeason   KlineCategory = 10
+	KlineYearAlt  KlineCategory = 11
 )
