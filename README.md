@@ -433,6 +433,35 @@ TDX_LIVE=1 go run ./cmd/tdx-fixture-matrix \
 
 输出 JSONL，一行一个 operation 结果。单个 operation 失败不会阻断后续 operation，适合收集公网节点能力矩阵。
 
+### Live Integrity Validation
+
+```bash
+TDX_LIVE=1 go run ./cmd/tdx-validate \
+  -timeout 45s \
+  -operation-timeout 8s \
+  -connect-timeout 1s \
+  -markets sh \
+  -symbols sh:600519 \
+  -kline day \
+  -skip-boards \
+  -skip-files \
+  -pretty
+```
+
+`tdx-validate` 会直接调用 public API，并输出 JSON 完整性报告：每个 operation 的 `ok`、行数、latency、error/warning finding 都会保留。默认需要 `TDX_LIVE=1`，避免普通测试误打公网。
+
+常用参数：
+
+| Flag | 用途 |
+|---|---|
+| `-markets sh,sz,bj` | 验证哪些市场的 count/list。 |
+| `-symbols sh:600519,sz:000001` | 验证 quote/K 线/分时/逐笔/财务等使用的样本证券。 |
+| `-kline day,week,month` | 验证哪些 K 线周期。 |
+| `-full-kline` | 验证所有已知 K 线周期。 |
+| `-operation-timeout 8s` | 每个 operation 独立 timeout，避免一个慢接口拖垮整份报告。 |
+| `-connect-timeout 1s` | TCP connect/write timeout，建议小于 operation timeout 以测试 failover。 |
+| `-skip-boards` / `-skip-files` | 跳过板块和 report file 下载，适合先跑核心行情 smoke。 |
+
 ### Dump Raw Frame
 
 ```bash
@@ -487,10 +516,19 @@ go vet ./...
 go test -count=1 ./...
 ```
 
+Benchmarks：
+
+```bash
+go test -run=^$ -bench=. -benchmem ./codec ./frame ./command ./validation .
+```
+
+当前 benchmark 覆盖 codec、frame decode、核心 command parser、validation 规则，以及 `GetSecurityQuotes` 批量分片。性能基线应随 parser/高可用策略修改一起重新跑。
+
 Live smoke：
 
 ```bash
 go run ./cmd/tdx-probe -op security-count -market sh -timeout 5s
+TDX_LIVE=1 go run ./cmd/tdx-validate -markets sh -symbols sh:600519 -kline day -skip-boards -skip-files
 ```
 
 Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
@@ -515,3 +553,4 @@ Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
 6. 需要反推协议字段时用 `Client.Capture` 或 `tdx-probe -capture-dir`。
 7. 和 pytdx/xmtdx 对照时用 `tdx-compare-py`。
 8. 遇到故障复现时用 `tdxtest.StartScript` 写 fake server 测试。
+9. 发布前用 `tdx-validate` 跑 live 完整性报告，并用 `go test -bench=. -benchmem` 更新性能基线。

@@ -16,8 +16,7 @@ This document preserves the current project context, completed work, remaining w
 - The previous push error happened because `origin` used default `git@github.com:quantbeing/tdx.git`, which authenticated as GitHub user `lhqlhhh`. The fix was changing origin to the `github-quantbeing` SSH alias.
 - Backup branch `backup/before-author-fix` was deleted.
 - A filter-branch backup ref may still exist locally at `.git/refs/original/refs/heads/main`. It is not pushed by normal `git push`, but do not run `git push --all` or `git push --mirror` unless this is intentionally cleaned or reviewed.
-- As of this handoff, local `main` is ahead of `origin/main` by one commit:
-  - `570b50e fix: align kline category wire values`
+- Current ahead/behind state can change as validation work is committed. Always check with `git status --short --branch` before pushing.
 - Normal push command:
 
 ```bash
@@ -238,7 +237,7 @@ go test -count=1 ./...
 
 Result: all packages passed.
 
-Dry-run push was also checked after the K-line category fix:
+Dry-run push was checked after the K-line category fix:
 
 ```bash
 git push --dry-run
@@ -255,19 +254,66 @@ Live TDX smoke tests are not part of default verification. They should be run ex
 
 ## Data Integrity And Performance Test Status
 
-Data integrity has not yet been fully accepted against live TDX market data. Current tests prove offline parser behavior, codec behavior, command request construction, fake-server failure handling, fixture writing, JSON comparison tooling, and client failover behavior. They do not yet prove that every public API returns complete and field-accurate live data across SH/SZ/BJ, all K-line periods, quote batches, minute data, transactions, finance, XDXR, company files, block files, and report files.
+Data integrity validation tooling now exists in `validation/` and `cmd/tdx-validate`. It checks live public API results for structural integrity, row counts, symbol coverage, raw record preservation, OHLC consistency, nonnegative core prices/amounts, company/board/file record structure, and operation errors. It produces a JSON report and continues after per-operation failures.
 
-Performance testing has not yet been implemented as real Go benchmarks. A check with `go test -run=^$ -bench=. ./...` currently finds no benchmark functions, so there are no measured throughput, latency, allocation, quote-batch, pagination, or connection-pool performance baselines yet.
+Default unit tests still do not hit public TDX servers. Live validation must be run explicitly:
 
-The next validation milestone should add:
+```bash
+TDX_LIVE=1 go run ./cmd/tdx-validate \
+  -timeout 45s \
+  -operation-timeout 8s \
+  -connect-timeout 1s \
+  -markets sh \
+  -symbols sh:600519 \
+  -kline day \
+  -skip-boards \
+  -skip-files \
+  -pretty
+```
 
-- live fixture matrix capture for every implemented operation
-- pytdx/xmtdx JSON comparison on the same symbols, dates, and markets
-- field-level completeness checks for parsed records versus raw body length/count
-- all-market pagination integrity checks for `ListSecurities`
-- batch quote integrity checks across protocol chunk boundaries
-- benchmark tests for codecs, parsers, quote batch splitting, full security-list pagination, and connection-pool/failover behavior
-- an explicit performance report with p50/p95/p99 latency, rows/sec, allocations, retry count, and host-operation failure matrix
+Latest live run in this environment, on 2026-06-09 around 20:41 Asia/Shanghai:
+
+- Scope: SH only, symbol `600519`, day K-line, boards/report files skipped.
+- Result: 12 operation checks, 10 OK, 2 failed, 2 errors, 167 warnings.
+- Passed: SH count, SH first security-list page, single-symbol quote, day bars, minute-time structural check, transaction page, market stat, finance, XDXR, company category.
+- Failed: `fund_flow_SH_600519` and `history_fund_flow_SH_600519`, both due transaction/history-transaction timeout on public servers.
+- Warnings: minute-time volume can decode negative for many rows. This is no longer treated as fatal; it needs raw fixture comparison against pytdx/xmtdx before deciding whether the field is signed, a delta, or parser semantics are incomplete.
+- Multi-market quote validation with `sh:600519,sz:000001` produced a bad second symbol once; this needs raw fixture capture before changing the quote parser.
+
+Performance benchmarks now exist for codec, frame decode, core command parsers, validation rules, and client quote batch splitting. Run them with:
+
+```bash
+go test -run=^$ -bench=. -benchmem ./codec ./frame ./command ./validation .
+```
+
+Latest benchmark run on Apple M2 / darwin arm64:
+
+```text
+BenchmarkGetPrice                         3.280 ns/op      0 B/op       0 allocs/op
+BenchmarkPutPrice                        18.89 ns/op       8 B/op       1 allocs/op
+BenchmarkGetVolume                       10.50 ns/op       0 B/op       0 allocs/op
+BenchmarkGetDateTimeMinute                2.828 ns/op      0 B/op       0 allocs/op
+BenchmarkGetDateTimeDay                   2.951 ns/op      0 B/op       0 allocs/op
+BenchmarkDecodeBodyRaw                    3.734 ns/op      0 B/op       0 allocs/op
+BenchmarkDecodeBodyZlib                3184 ns/op      42790 B/op      11 allocs/op
+BenchmarkParseSecurityList            169218 ns/op    434143 B/op    6002 allocs/op
+BenchmarkParseSecurityBars              45385 ns/op    166682 B/op     802 allocs/op
+BenchmarkParseIndexBars                 48405 ns/op    173082 B/op     802 allocs/op
+BenchmarkParseSecurityQuotes            26783 ns/op     57492 B/op     277 allocs/op
+BenchmarkParseMinuteTime                 6078 ns/op     20376 B/op     242 allocs/op
+BenchmarkParseTransactions              25994 ns/op     86553 B/op     802 allocs/op
+BenchmarkValidateSecurities              2180 ns/op         0 B/op       0 allocs/op
+BenchmarkValidateQuotes                  8930 ns/op     11472 B/op     166 allocs/op
+BenchmarkClientGetSecurityQuotesBatchSplit 15308 ns/op 192769 B/op     169 allocs/op
+```
+
+Remaining validation work:
+
+- Capture raw fixtures for multi-symbol/multi-market quote responses and compare with pytdx/xmtdx.
+- Capture raw fixtures for minute-time data and decide final semantics for negative volume values.
+- Add all-market pagination integrity checks for `ListSecurities`, not only page 0.
+- Add a durable performance report artifact after each major parser/client change.
+- Extend live validation to board/report files once public-server file behavior is better characterized.
 
 ## Known Limits
 

@@ -13,7 +13,7 @@
 | Security count/list | yes | Raw/unknown fields preserved. |
 | Stock/index K-line | yes | Index parser keeps `UpCount` and `DownCount`. |
 | Snapshot/quotes | yes | Parser implemented with 5-level book, server time, unknown fields, raw record bytes, and 80-symbol batch splitting. |
-| Minute time / transactions | yes | Today/history parsers implemented; `unknown_1`, `NumOrders`, and `UnknownLast` are preserved. Live binary fixtures still needed. |
+| Minute time / transactions | yes | Today/history parsers implemented; `unknown_1`, `NumOrders`, and `UnknownLast` are preserved. Live validator reports minute volume warnings that still need raw fixture comparison. |
 | Market stat | yes | Derived from SH `880005` quote following xmtdx; suspended count is the residual `total-up-down-neutral`. |
 | Fund flow | yes | Today flow is derived from paged transaction records with xmtdx amount thresholds. |
 | History fund flow | partial | Category 22 parser implemented; client falls back to day-bar dates plus historical transaction aggregation when direct response is empty. Live fixtures still needed. |
@@ -23,5 +23,7 @@
 | BJ stable full universe | partial | Public servers are unstable; fallback via report files/base info remains to implement. |
 | Raw fixture capture | yes | `Client.Capture`, `tdx-probe -capture-dir`, and `tdx-fixture-matrix` preserve request/header/raw-body/decoded-body/parsed JSON. |
 | Python comparison CLI | yes | `tdx-compare-py` compares Go JSON or fixture `parsed_json` against pytdx/xmtdx reference JSON. |
-| CLI diagnostics | yes | `tdx-health`, `tdx-probe`, `tdx-fixture-matrix`, `tdx-dump-frame`, and `tdx-compare-py` are implemented; matrix output is JSONL and continues after per-operation failures. |
+| Live integrity validation | partial | `tdx-validate` runs public API checks and emits JSON reports with per-operation timeout. Latest SH smoke found fund-flow timeouts and minute-volume warnings; multi-market quote needs raw fixture capture. |
+| Benchmarks | yes | Codec, frame, command parser, validation, and quote batch-split benchmarks are implemented with `go test -run=^$ -bench=. -benchmem ./codec ./frame ./command ./validation .`. |
+| CLI diagnostics | yes | `tdx-health`, `tdx-probe`, `tdx-fixture-matrix`, `tdx-validate`, `tdx-dump-frame`, and `tdx-compare-py` are implemented; matrix output is JSONL and continues after per-operation failures. |
 | Fake TDX fault server | yes | `tdxtest.StartScript` simulates normal frames, raw bytes, bad zlib, partial frames, delayed responses, and disconnects. |
