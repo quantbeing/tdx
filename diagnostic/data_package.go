@@ -4,8 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -54,6 +57,26 @@ type DataPackageLocalIndex struct {
 	SkippedLines []DataPackageSkippedLine   `json:"skipped_lines,omitempty"`
 }
 
+type DataPackageFixed13Record struct {
+	Offset             int     `json:"offset"`
+	RawHex             string  `json:"raw_hex"`
+	Marker             uint8   `json:"marker"`
+	DateLike           int     `json:"date_like"`
+	Field1Bits         uint32  `json:"field1_bits"`
+	Field1Float32      float64 `json:"field1_float32"`
+	Field1Float32Valid bool    `json:"field1_float32_valid"`
+	Field2Uint32       uint32  `json:"field2_uint32"`
+}
+
+type DataPackageFixed13Records struct {
+	Source           string                     `json:"source,omitempty"`
+	RecordSize       int                        `json:"record_size"`
+	Records          []DataPackageFixed13Record `json:"records"`
+	RecordCount      int                        `json:"record_count"`
+	TrailingBytes    int                        `json:"trailing_bytes"`
+	TrailingBytesHex string                     `json:"trailing_bytes_hex,omitempty"`
+}
+
 type DataPackageManifestSummary struct {
 	Source           string             `json:"source,omitempty"`
 	EntryCount       int                `json:"entry_count"`
@@ -77,6 +100,16 @@ type DataPackageLocalIndexSummary struct {
 	Entries          []DataPackageChecksumEntry `json:"entries,omitempty"`
 }
 
+type DataPackageFixed13Summary struct {
+	Source           string                     `json:"source,omitempty"`
+	RecordSize       int                        `json:"record_size"`
+	RecordCount      int                        `json:"record_count"`
+	TrailingBytes    int                        `json:"trailing_bytes"`
+	TrailingBytesHex string                     `json:"trailing_bytes_hex,omitempty"`
+	RecordsTruncated int                        `json:"records_truncated"`
+	Records          []DataPackageFixed13Record `json:"records,omitempty"`
+}
+
 func FetchDataPackageManifest(ctx context.Context, url string, client *http.Client) (DataPackageManifest, error) {
 	data, err := fetchDataPackageBytes(ctx, url, client)
 	if err != nil {
@@ -93,6 +126,14 @@ func FetchDataPackageLocalIndex(ctx context.Context, url string, client *http.Cl
 	return ParseDataPackageLocalIndex(url, data)
 }
 
+func FetchDataPackageFixed13Records(ctx context.Context, url string, client *http.Client) (DataPackageFixed13Records, error) {
+	data, err := fetchDataPackageBytes(ctx, url, client)
+	if err != nil {
+		return DataPackageFixed13Records{}, err
+	}
+	return ParseDataPackageFixed13Records(url, data)
+}
+
 func fetchDataPackageBytes(ctx context.Context, url string, client *http.Client) ([]byte, error) {
 	if strings.TrimSpace(url) == "" {
 		return nil, fmt.Errorf("data package url is required")
@@ -104,6 +145,8 @@ func fetchDataPackageBytes(ctx context.Context, url string, client *http.Client)
 	if err != nil {
 		return nil, fmt.Errorf("build data package request: %w", err)
 	}
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("User-Agent", "tdx-go/0.1")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch data package: %w", err)
@@ -118,6 +161,9 @@ func fetchDataPackageBytes(ctx context.Context, url string, client *http.Client)
 	}
 	if int64(len(data)) > maxDataPackageBytes {
 		return nil, fmt.Errorf("read data package: response exceeds %d bytes", maxDataPackageBytes)
+	}
+	if isHTMLChallengeResponse(resp.Header.Get("Content-Type"), data) {
+		return nil, fmt.Errorf("fetch data package: response looks like html/javascript challenge content_type=%q", resp.Header.Get("Content-Type"))
 	}
 	return data, nil
 }
@@ -163,6 +209,25 @@ func SummarizeDataPackageLocalIndex(index DataPackageLocalIndex, limit int) Data
 	}
 }
 
+func SummarizeDataPackageFixed13Records(records DataPackageFixed13Records, limit int) DataPackageFixed13Summary {
+	if limit < 0 || limit > len(records.Records) {
+		limit = len(records.Records)
+	}
+	rows := make([]DataPackageFixed13Record, 0, limit)
+	if limit > 0 {
+		rows = append(rows, records.Records[:limit]...)
+	}
+	return DataPackageFixed13Summary{
+		Source:           records.Source,
+		RecordSize:       records.RecordSize,
+		RecordCount:      len(records.Records),
+		TrailingBytes:    records.TrailingBytes,
+		TrailingBytesHex: records.TrailingBytesHex,
+		RecordsTruncated: len(records.Records) - len(rows),
+		Records:          rows,
+	}
+}
+
 func ParseDataPackageManifest(source string, data []byte) (DataPackageManifest, error) {
 	manifest := DataPackageManifest{Source: source}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -190,6 +255,42 @@ func ParseDataPackageManifest(source string, data []byte) (DataPackageManifest, 
 		return DataPackageManifest{}, fmt.Errorf("scan data package manifest: %w", err)
 	}
 	return manifest, nil
+}
+
+func ParseDataPackageFixed13Records(source string, data []byte) (DataPackageFixed13Records, error) {
+	const recordSize = 13
+	out := DataPackageFixed13Records{
+		Source:     source,
+		RecordSize: recordSize,
+	}
+	fullSize := len(data) / recordSize * recordSize
+	out.Records = make([]DataPackageFixed13Record, 0, fullSize/recordSize)
+	for offset := 0; offset < fullSize; offset += recordSize {
+		raw := data[offset : offset+recordSize]
+		field1Bits := binary.LittleEndian.Uint32(raw[5:9])
+		field1 := float64(math.Float32frombits(field1Bits))
+		field1Valid := !math.IsNaN(field1) && !math.IsInf(field1, 0)
+		if !field1Valid {
+			field1 = 0
+		}
+		out.Records = append(out.Records, DataPackageFixed13Record{
+			Offset:             offset,
+			RawHex:             hex.EncodeToString(raw),
+			Marker:             raw[0],
+			DateLike:           int(binary.LittleEndian.Uint32(raw[1:5])),
+			Field1Bits:         field1Bits,
+			Field1Float32:      field1,
+			Field1Float32Valid: field1Valid,
+			Field2Uint32:       binary.LittleEndian.Uint32(raw[9:13]),
+		})
+	}
+	out.RecordCount = len(out.Records)
+	if fullSize < len(data) {
+		trailing := data[fullSize:]
+		out.TrailingBytes = len(trailing)
+		out.TrailingBytesHex = hex.EncodeToString(trailing)
+	}
+	return out, nil
 }
 
 func (m DataPackageManifest) FindEntry(fileName string) (DataPackageEntry, bool) {
@@ -381,4 +482,22 @@ func isMD5Hex(raw string) bool {
 		}
 	}
 	return true
+}
+
+func isHTMLChallengeResponse(contentType string, data []byte) bool {
+	if strings.Contains(strings.ToLower(contentType), "text/html") {
+		return true
+	}
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return false
+	}
+	n := len(trimmed)
+	if n > 64 {
+		n = 64
+	}
+	prefix := strings.ToLower(string(trimmed[:n]))
+	return strings.HasPrefix(prefix, "<script") ||
+		strings.HasPrefix(prefix, "<html") ||
+		strings.HasPrefix(prefix, "<!doctype")
 }

@@ -20,7 +20,7 @@
 | Finance / xdxr | yes | Latest finance parser and xdxr parser implemented; xdxr record headers and share-count volume decoding follow xmtdx fixes. |
 | Company info | yes | Category and content commands implemented; content returns raw response bytes after the 12-byte protocol header. |
 | Block/report file | partial | Metadata, chunk fetch, report fetch loop, and local `.dat` board parser implemented. 2026-06-09 live `boards_concept` returned rows, but `base_info.zip` returned an empty public-server payload. |
-| Official data-package probe | partial | `tdx-data-probe` parses `tdxgp/gpszsh.txt` manifests and `.local` `[MD5]` indexes; 2026-06-10 live probe enumerated 319 `gpbj*.dat` candidates. Payload parser and checksum semantics remain to implement. |
+| Official data-package probe | partial | `tdx-data-probe` parses `tdxgp/gpszsh.txt` manifests, `.local` `[MD5]` indexes, and fixed 13-byte raw `.dat` records. 2026-06-10 live probe enumerated 319 `gpbj*.dat` candidates; payload field semantics and checksum semantics remain to implement. |
 | BJ stable full universe | partial | Public servers are unstable; `security_count_BJ=345` is reachable but `security_list_BJ_page_0` timed out in live validation. Official data-package probe can enumerate candidates, but complete name/status metadata fallback remains to implement. |
 | Raw fixture capture | yes | `Client.Capture`, `tdx-probe -capture-dir`, and `tdx-fixture-matrix` preserve request/header/raw-body/decoded-body/parsed JSON. |
 | Python comparison CLI | yes | `tdx-compare-py` compares Go JSON or fixture `parsed_json` against pytdx/xmtdx reference JSON. |

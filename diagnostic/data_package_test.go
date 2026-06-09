@@ -2,7 +2,10 @@ package diagnostic
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -86,6 +89,19 @@ func TestFetchDataPackageManifestParsesHTTPResponse(t *testing.T) {
 	}
 	if manifest.Source != server.URL+"/tdxgp/gpszsh.txt" || manifest.PackageCount != 1 {
 		t.Fatalf("manifest = %+v", manifest)
+	}
+}
+
+func TestFetchDataPackageManifestRejectsHTMLChallenge(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte("<script>challenge()</script>"))
+	}))
+	defer server.Close()
+
+	_, err := FetchDataPackageManifest(context.Background(), server.URL+"/tdxgp/gpszsh.txt", server.Client())
+	if err == nil || !strings.Contains(err.Error(), "html/javascript") {
+		t.Fatalf("err = %v", err)
 	}
 }
 
@@ -192,6 +208,81 @@ func TestSummarizeAndFilterDataPackageLocalIndex(t *testing.T) {
 	}
 }
 
+func TestParseDataPackageFixed13RecordsPreservesRawFieldsAndTrailingBytes(t *testing.T) {
+	data, err := hex.DecodeString("01bf7b330100008841000000000176a033010000104200000000ff")
+	if err != nil {
+		t.Fatalf("DecodeString: %v", err)
+	}
+
+	records, err := ParseDataPackageFixed13Records("gpbj920021.dat", data)
+	if err != nil {
+		t.Fatalf("ParseDataPackageFixed13Records: %v", err)
+	}
+	if records.Source != "gpbj920021.dat" || records.RecordCount != 2 {
+		t.Fatalf("records = %+v", records)
+	}
+	if records.TrailingBytesHex != "ff" {
+		t.Fatalf("TrailingBytesHex = %q", records.TrailingBytesHex)
+	}
+	first := records.Records[0]
+	if first.Offset != 0 || first.Marker != 1 || first.DateLike != 20151231 || first.Field1Float32 != 17 || first.Field2Uint32 != 0 {
+		t.Fatalf("first = %+v", first)
+	}
+	if first.RawHex != "01bf7b33010000884100000000" {
+		t.Fatalf("RawHex = %q", first.RawHex)
+	}
+}
+
+func TestFetchDataPackageFixed13RecordsParsesHTTPResponse(t *testing.T) {
+	payload, err := hex.DecodeString("01bf7b33010000884100000000")
+	if err != nil {
+		t.Fatalf("DecodeString: %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/tdxgp/gpbj920021.dat" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		_, _ = w.Write(payload)
+	}))
+	defer server.Close()
+
+	records, err := FetchDataPackageFixed13Records(context.Background(), server.URL+"/tdxgp/gpbj920021.dat", server.Client())
+	if err != nil {
+		t.Fatalf("FetchDataPackageFixed13Records: %v", err)
+	}
+	if records.RecordCount != 1 || records.Records[0].DateLike != 20151231 {
+		t.Fatalf("records = %+v", records)
+	}
+}
+
+func TestFetchDataPackageFixed13RecordsRejectsHTMLChallenge(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("<script>challenge()</script>"))
+	}))
+	defer server.Close()
+
+	_, err := FetchDataPackageFixed13Records(context.Background(), server.URL+"/tdxgp/gpbj920021.dat", server.Client())
+	if err == nil || !strings.Contains(err.Error(), "html/javascript") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSummarizeDataPackageFixed13RecordsLimitsRows(t *testing.T) {
+	data, err := hex.DecodeString("01bf7b330100008841000000000176a033010000104200000000")
+	if err != nil {
+		t.Fatalf("DecodeString: %v", err)
+	}
+	records, err := ParseDataPackageFixed13Records("fixture", data)
+	if err != nil {
+		t.Fatalf("ParseDataPackageFixed13Records: %v", err)
+	}
+
+	summary := SummarizeDataPackageFixed13Records(records, 1)
+	if summary.RecordCount != 2 || len(summary.Records) != 1 || summary.RecordsTruncated != 1 {
+		t.Fatalf("summary = %+v", summary)
+	}
+}
+
 func BenchmarkParseDataPackageManifest(b *testing.B) {
 	data := benchmarkDataPackageManifest(7240)
 	b.ReportAllocs()
@@ -220,6 +311,20 @@ func BenchmarkParseDataPackageLocalIndex(b *testing.B) {
 	}
 }
 
+func BenchmarkParseDataPackageFixed13Records(b *testing.B) {
+	data := benchmarkDataPackageFixed13Records(10858)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		records, err := ParseDataPackageFixed13Records("benchmark", data)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if records.RecordCount != 10858 {
+			b.Fatalf("RecordCount = %d", records.RecordCount)
+		}
+	}
+}
+
 func benchmarkDataPackageManifest(count int) []byte {
 	var b strings.Builder
 	for i := 0; i < count; i++ {
@@ -230,6 +335,18 @@ func benchmarkDataPackageManifest(count int) []byte {
 		_, _ = fmt.Fprintf(&b, "%s%06d.dat,0123456789abcdef0123456789abcdef,%d\n", prefix, i, 1000+i)
 	}
 	return []byte(b.String())
+}
+
+func benchmarkDataPackageFixed13Records(count int) []byte {
+	data := make([]byte, count*13)
+	for i := 0; i < count; i++ {
+		offset := i * 13
+		data[offset] = 1
+		binary.LittleEndian.PutUint32(data[offset+1:offset+5], uint32(20151231+i))
+		binary.LittleEndian.PutUint32(data[offset+5:offset+9], math.Float32bits(float32(i)))
+		binary.LittleEndian.PutUint32(data[offset+9:offset+13], uint32(i%100))
+	}
+	return data
 }
 
 func benchmarkDataPackageLocalIndex(count int) []byte {

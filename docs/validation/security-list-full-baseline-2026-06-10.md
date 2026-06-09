@@ -144,17 +144,43 @@ Important integrity finding:
 - Some manifest MD5 values differ from the `.local` index values for the same file, for example `gpbj920985.dat` in this live run.
 - At least one sampled `.dat` file had HTTP `Content-Length` differing from manifest `size` by one 13-byte record, and direct file MD5 did not match the manifest MD5.
 - Therefore these fields are useful as diagnostic evidence but must not become hard integrity validation until the official update/checksum semantics are understood.
+- Go's standard HTTP client received a `text/html` JavaScript challenge for direct `.dat` fetches in this environment. `tdx-data-probe` now rejects this instead of parsing it as binary. Use curl plus `-input` for binary `.dat` samples.
+
+DAT13 local sample command:
+
+```bash
+curl -L --max-time 15 -sS \
+  https://data.tdx.com.cn/tdxgp/gpbj920021.dat \
+  -o /tmp/tdx-gpbj920021.dat
+
+go run ./cmd/tdx-data-probe \
+  -kind dat13 \
+  -input /tmp/tdx-gpbj920021.dat \
+  -limit 6
+```
+
+Result:
+
+- File size: `141154`
+- Record size: `13`
+- Record count: `10858`
+- Trailing bytes: `0`
+- First records preserve raw hex plus fields named only by observed shape:
+  - `20151231`, `field1_float32=17`
+  - `20160630`, `field1_float32=36`
+  - `20161231`, `field1_float32=55`
+  - `20170630`, `field1_float32=181`
 
 Interpretation:
 
 - Official HTTP data packages give a validated BJ candidate-file fallback surface even when HQ `security_list_BJ_page_0` times out.
 - They currently enumerate `319` `gpbj*.dat` candidates, while HQ `security_count_BJ` reports `345`; this is useful but not a complete BJ securities list.
-- The `.dat` payload appears record-oriented and still needs fixture-backed parser work before it can provide names, status, or canonical security metadata.
+- The sampled `.dat` payload is confirmed to be 13-byte record-oriented, but field semantics are still unknown and it does not yet provide names, status, or canonical security metadata.
 
 ## Next Work
 
 - Add BJ fallback collection from official data package candidates and protocol-accessible files such as `base_info.zip` or related report/security files.
-- Parse sampled `gpbj*.dat` fixtures with tests; determine record length, date/price fields, and whether names/security metadata are present elsewhere.
+- Continue parsing sampled `gpbj*.dat` fixtures with tests; determine field semantics and whether names/security metadata are present elsewhere.
 - Investigate official data package checksum/update semantics before enforcing MD5 or size.
 - Build a host-operation matrix specifically for `security_list_BJ_page_0`.
 - Consider exposing full-list retry budgets separately from general operation timeout if longer BJ probing is needed.

@@ -446,18 +446,21 @@ report
 go run ./cmd/tdx-data-probe -timeout 15s -limit 8
 go run ./cmd/tdx-data-probe -timeout 15s -prefix gpbj -limit 8
 go run ./cmd/tdx-data-probe -kind local-index -timeout 15s -prefix gpbj -limit 8
+curl -L --max-time 15 -sS https://data.tdx.com.cn/tdxgp/gpbj920021.dat -o /tmp/tdx-gpbj920021.dat
+go run ./cmd/tdx-data-probe -kind dat13 -input /tmp/tdx-gpbj920021.dat -limit 8
 ```
 
 输出 JSON 摘要：
 
 | Flag | 用途 |
 |---|---|
-| `-kind manifest|local-index` | `manifest` 解析 `filename,md5,size` 清单；`local-index` 解析 `.local` 文件中的 `[MD5]` 段。 |
+| `-kind manifest|local-index|dat13` | `manifest` 解析 `filename,md5,size` 清单；`local-index` 解析 `.local` 文件中的 `[MD5]` 段；`dat13` 解析 13-byte raw record 样本。 |
 | `-url` | 自定义官方数据包 URL；`local-index` 默认会切到 `https://data.tdx.com.cn/tdxgp/gpszsh.local`。 |
+| `-input` | 从本地文件解析，适合用 curl 下载 `.dat` 后再让 Go parser 反推字段。 |
 | `-prefix gpbj` | 按文件名前缀过滤，例如只看 BJ 候选 `gpbj*.dat`。 |
 | `-limit 20` | JSON 中最多输出多少条 entry；`-1` 输出全部。 |
 
-2026-06-10 live 观察：`gpszsh.txt` manifest 当前有 `7240` 个条目，其中 `gpbj*.dat` 为 `319` 个；`gpszsh.local` 的 `[MD5]` 段同样能枚举 `319` 个 `gpbj` 条目。manifest/local-index/HTTP 文件的 MD5 与 size 语义存在不一致样本，现阶段只作为诊断 finding，不作为强完整性校验。
+2026-06-10 live 观察：`gpszsh.txt` manifest 当前有 `7240` 个条目，其中 `gpbj*.dat` 为 `319` 个；`gpszsh.local` 的 `[MD5]` 段同样能枚举 `319` 个 `gpbj` 条目。manifest/local-index/HTTP 文件的 MD5 与 size 语义存在不一致样本，现阶段只作为诊断 finding，不作为强完整性校验。Go 标准 HTTP 客户端抓部分 `.dat` 时会收到 CDN `text/html` challenge，`tdx-data-probe` 会拒绝误解析；需要 `.dat` 样本时优先用 curl 下载，再用 `-input` 解析本地文件。
 
 ### Live Fixture Matrix
 
@@ -581,14 +584,14 @@ Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
 - `tdx-validate -full-security-list` 已支持全市场分页完整性校验；默认 smoke 为了速度仍只查第 0 页。最新 SH/SZ live baseline 加上 `-security-list-page-retries 1` 后分别拉完 27215/23411 行，若干分页首次失败后重试成功并保留 warning。
 - BJ live baseline 中 `security_count_BJ=345`，但 `security_list_BJ_page_0` 在 15s timeout、3 次 page retry 下仍超时。`tdx-data-probe` 已确认官方 `tdxgp/gpszsh.txt` 与 `gpszsh.local` 可枚举 `319` 个 `gpbj*.dat` 候选，但还不能替代完整 BJ 证券列表。
 - `TDX_LIVE=1 tdx-validate` 含 boards/files：`boards_concept` 返回 270 行，`report_file_base_info.zip` 在当前公网节点返回 0 字节，仍需 fallback/节点矩阵继续反推。
-- 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `34.0 us/op`，minute parser 约 `9.1 us/op`，5000 行 universe validation 约 `244.0 us/op`，80 符号 quote 分片 client benchmark 约 `15.5 us/op`。新增官方数据包 parser benchmark 中，7240 行 manifest 约 `1.47 ms/op`，7240 行 `.local` index 约 `1.32 ms/op`。完整输出记录在 handoff 文档。
+- 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `34.0 us/op`，minute parser 约 `9.1 us/op`，5000 行 universe validation 约 `244.0 us/op`，80 符号 quote 分片 client benchmark 约 `15.5 us/op`。新增官方数据包 parser benchmark 中，7240 行 manifest 约 `1.76 ms/op`，7240 行 `.local` index 约 `1.24 ms/op`，10858 条 fixed13 raw record 约 `0.39 ms/op`。完整输出记录在 handoff 文档。
 
 ## Known Limits
 
 - 通达信 HQ 协议不是官方公开协议，字段含义需要通过 fixture 持续反推。
 - 公网 TDX 服务器按 operation/market 表现不一致，能握手不代表所有接口可用。
 - BJ 全量列表在公网节点上不稳定，目前通过 partial result 和 report/base info fallback 预留处理空间。
-- 官方 HTTP 数据包已能枚举 `gpbj*.dat`，但 `.dat` 记录格式、名称来源、MD5/size 语义仍需 fixture 和 parser 继续反推。
+- 官方 HTTP 数据包已能枚举 `gpbj*.dat` 并可用 `dat13` raw parser 观察 13-byte record，但字段语义、名称来源、MD5/size 语义仍需 fixture 和 parser 继续反推。
 - 更丰富的扩展市场接口仍在待解析状态。
 - 资金流中，当日资金流是逐笔成交聚合结果；历史资金流优先 category 22，空回包时 fallback 重算。
 
