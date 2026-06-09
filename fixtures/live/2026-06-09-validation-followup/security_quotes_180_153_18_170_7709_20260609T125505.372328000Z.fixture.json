@@ -1,0 +1,271 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-06-09T12:55:05.372576Z",
+  "operation": "security_quotes",
+  "server": {
+    "name": "tdx-sh-170",
+    "host": "180.153.18.170",
+    "port": 7709
+  },
+  "attempt": 1,
+  "latency_ms": 34,
+  "header": {
+    "Unknown0": 7654321,
+    "Unknown1": 1663041804,
+    "Unknown2": 87949312,
+    "ZipSize": 164,
+    "UnzipSize": 164
+  },
+  "request_hex": "0c01206300021a001a003e05050000000000000002000136303035313900303030303031",
+  "header_hex": "b1cb74000c01206300003e05a400a400",
+  "raw_body_hex": "01130200013630303531398610a0aa0fba0abb0abc0ad905a1dc970ee0aa0f94b303ba07c6a6504fa1fa01b3b801ec0180a7314100040e480101014c320105543c0103573e01011603000000000000861000303030303031331299114a4c0651a8f5a60ed911a8ab8c01ad8301af3e984e9fd93d89d24e00b189040001be66af3a4102af2aa2444203a249a233430498308c694405ae1e90b40196080000000000003312",
+  "body_hex": "01130200013630303531398610a0aa0fba0abb0abc0ad905a1dc970ee0aa0f94b303ba07c6a6504fa1fa01b3b801ec0180a7314100040e480101014c320105543c0103573e01011603000000000000861000303030303031331299114a4c0651a8f5a60ed911a8ab8c01ad8301af3e984e9fd93d89d24e00b189040001be66af3a4102af2aa2444203a249a233430498308c694405ae1e90b40196080000000000003312",
+  "raw_body_size": 164,
+  "body_size": 164,
+  "parsed_json": [
+    {
+      "Market": 1,
+      "Code": "600519",
+      "Price": {
+        "Mantissa": 125600,
+        "Scale": 2
+      },
+      "PreClose": {
+        "Mantissa": 126298,
+        "Scale": 2
+      },
+      "Open": {
+        "Mantissa": 126299,
+        "Scale": 2
+      },
+      "High": {
+        "Mantissa": 126300,
+        "Scale": 2
+      },
+      "Low": {
+        "Mantissa": 125255,
+        "Scale": 2
+      },
+      "Vol": 27860,
+      "CurVol": 506,
+      "Amount": 3500590592,
+      "SVol": 16033,
+      "BVol": 11827,
+      "Active1": 4230,
+      "Active2": 4230,
+      "Bid": [
+        {
+          "Price": {
+            "Mantissa": 125599,
+            "Scale": 2
+          },
+          "Volume": 4
+        },
+        {
+          "Price": {
+            "Mantissa": 125592,
+            "Scale": 2
+          },
+          "Volume": 1
+        },
+        {
+          "Price": {
+            "Mantissa": 125588,
+            "Scale": 2
+          },
+          "Volume": 1
+        },
+        {
+          "Price": {
+            "Mantissa": 125580,
+            "Scale": 2
+          },
+          "Volume": 1
+        },
+        {
+          "Price": {
+            "Mantissa": 125577,
+            "Scale": 2
+          },
+          "Volume": 1
+        }
+      ],
+      "Ask": [
+        {
+          "Price": {
+            "Mantissa": 125600,
+            "Scale": 2
+          },
+          "Volume": 14
+        },
+        {
+          "Price": {
+            "Mantissa": 125601,
+            "Scale": 2
+          },
+          "Volume": 1
+        },
+        {
+          "Price": {
+            "Mantissa": 125650,
+            "Scale": 2
+          },
+          "Volume": 5
+        },
+        {
+          "Price": {
+            "Mantissa": 125660,
+            "Scale": 2
+          },
+          "Volume": 3
+        },
+        {
+          "Price": {
+            "Mantissa": 125662,
+            "Scale": 2
+          },
+          "Volume": 1
+        }
+      ],
+      "RiseSpeed": {
+        "Mantissa": 0,
+        "Scale": 2
+      },
+      "LimitUp": null,
+      "LimitDown": null,
+      "Unknown0": 14874401,
+      "Unknown1": -125600,
+      "Unknown2": -108,
+      "Unknown3": 403904,
+      "Unknown4": 790,
+      "Unknown5": 0,
+      "Unknown6": 0,
+      "Unknown7": 0,
+      "Unknown8": 0,
+      "ServerTime": "14:52:27.843",
+      "Raw": "ATYwMDUxOYYQoKoPugq7CrwK2QWh3JcO4KoPlLMDugfGplBPofoBs7gB7AGApzFBAAQOSAEBAUwyAQVUPAEDVz4BARYDAAAAAAAAhhA="
+    },
+    {
+      "Market": 161,
+      "Code": "ܗ\u000e\ufffd\ufffd\u000f",
+      "Price": {
+        "Mantissa": 3,
+        "Scale": 2
+      },
+      "PreClose": {
+        "Mantissa": 509,
+        "Scale": 2
+      },
+      "Open": {
+        "Mantissa": -657795,
+        "Scale": 2
+      },
+      "High": {
+        "Mantissa": -12,
+        "Scale": 2
+      },
+      "Low": {
+        "Mantissa": 16036,
+        "Scale": 2
+      },
+      "Vol": 403904,
+      "CurVol": -1,
+      "Amount": 145424,
+      "SVol": 1,
+      "BVol": 1,
+      "Active1": 45972,
+      "Active2": 39186,
+      "Bid": [
+        {
+          "Price": {
+            "Mantissa": 53,
+            "Scale": 2
+          },
+          "Volume": 5
+        },
+        {
+          "Price": {
+            "Mantissa": 63,
+            "Scale": 2
+          },
+          "Volume": 3
+        },
+        {
+          "Price": {
+            "Mantissa": 65,
+            "Scale": 2
+          },
+          "Volume": 1
+        },
+        {
+          "Price": {
+            "Mantissa": 6,
+            "Scale": 2
+          },
+          "Volume": 0
+        },
+        {
+          "Price": {
+            "Mantissa": 3,
+            "Scale": 2
+          },
+          "Volume": 0
+        }
+      ],
+      "Ask": [
+        {
+          "Price": {
+            "Mantissa": 4,
+            "Scale": 2
+          },
+          "Volume": -20
+        },
+        {
+          "Price": {
+            "Mantissa": 4,
+            "Scale": 2
+          },
+          "Volume": -23
+        },
+        {
+          "Price": {
+            "Mantissa": 4,
+            "Scale": 2
+          },
+          "Volume": 22
+        },
+        {
+          "Price": {
+            "Mantissa": 3,
+            "Scale": 2
+          },
+          "Volume": 0
+        },
+        {
+          "Price": {
+            "Mantissa": 3,
+            "Scale": 2
+          },
+          "Volume": 1030
+        }
+      ],
+      "RiseSpeed": {
+        "Mantissa": 13105,
+        "Scale": 2
+      },
+      "LimitUp": null,
+      "LimitDown": null,
+      "Unknown0": 11827,
+      "Unknown1": -108,
+      "Unknown2": 1,
+      "Unknown3": -12,
+      "Unknown4": 12288,
+      "Unknown5": 48,
+      "Unknown6": 48,
+      "Unknown7": 48,
+      "Unknown8": 48,
+      "ServerTime": "00:00:42.577",
+      "Raw": "odyXDuCqD5SzA7oHxqZQT6H6AbO4AewBgKcxQQAEDkgBAQFMMgEFVDwBA1c+AQEWAwAAAAAAAIYQADAwMDAwMTMSmQ=="
+    }
+  ]
+}

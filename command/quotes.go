@@ -90,43 +90,51 @@ func (c SecurityQuotesCommand) ParseResponse(body []byte) (any, error) {
 			return nil, fmt.Errorf("security_quotes low[%d]: %w", i, err)
 		}
 		pos = next
-		unknown0, pos, err := getQuotePrice(body, pos, i, "unknown0")
+		unknown0, next, err := getQuotePrice(body, pos, i, "unknown0")
 		if err != nil {
 			return nil, err
 		}
-		unknown1, pos, err := getQuotePrice(body, pos, i, "unknown1")
+		pos = next
+		unknown1, next, err := getQuotePrice(body, pos, i, "unknown1")
 		if err != nil {
 			return nil, err
 		}
-		vol, pos, err := getQuotePrice(body, pos, i, "vol")
+		pos = next
+		vol, next, err := getQuotePrice(body, pos, i, "vol")
 		if err != nil {
 			return nil, err
 		}
-		curVol, pos, err := getQuotePrice(body, pos, i, "cur_vol")
+		pos = next
+		curVol, next, err := getQuotePrice(body, pos, i, "cur_vol")
 		if err != nil {
 			return nil, err
 		}
+		pos = next
 		amount, next, err := codec.GetVolume(body, pos)
 		if err != nil {
 			return nil, fmt.Errorf("security_quotes amount[%d]: %w", i, err)
 		}
 		pos = next
-		sVol, pos, err := getQuotePrice(body, pos, i, "s_vol")
+		sVol, next, err := getQuotePrice(body, pos, i, "s_vol")
 		if err != nil {
 			return nil, err
 		}
-		bVol, pos, err := getQuotePrice(body, pos, i, "b_vol")
+		pos = next
+		bVol, next, err := getQuotePrice(body, pos, i, "b_vol")
 		if err != nil {
 			return nil, err
 		}
-		unknown2, pos, err := getQuotePrice(body, pos, i, "unknown2")
+		pos = next
+		unknown2, next, err := getQuotePrice(body, pos, i, "unknown2")
 		if err != nil {
 			return nil, err
 		}
-		unknown3, pos, err := getQuotePrice(body, pos, i, "unknown3")
+		pos = next
+		unknown3, next, err := getQuotePrice(body, pos, i, "unknown3")
 		if err != nil {
 			return nil, err
 		}
+		pos = next
 
 		var bid, ask [5]model.QuoteLevel
 		for level := 0; level < 5; level++ {
@@ -158,22 +166,26 @@ func (c SecurityQuotesCommand) ParseResponse(body []byte) (any, error) {
 		}
 		unknown4 := binary.LittleEndian.Uint16(body[pos : pos+2])
 		pos += 2
-		unknown5, pos, err := getQuotePrice(body, pos, i, "unknown5")
+		unknown5, next, err := getQuotePrice(body, pos, i, "unknown5")
 		if err != nil {
 			return nil, err
 		}
-		unknown6, pos, err := getQuotePrice(body, pos, i, "unknown6")
+		pos = next
+		unknown6, next, err := getQuotePrice(body, pos, i, "unknown6")
 		if err != nil {
 			return nil, err
 		}
-		unknown7, pos, err := getQuotePrice(body, pos, i, "unknown7")
+		pos = next
+		unknown7, next, err := getQuotePrice(body, pos, i, "unknown7")
 		if err != nil {
 			return nil, err
 		}
-		unknown8, pos, err := getQuotePrice(body, pos, i, "unknown8")
+		pos = next
+		unknown8, next, err := getQuotePrice(body, pos, i, "unknown8")
 		if err != nil {
 			return nil, err
 		}
+		pos = next
 		if pos+4 > len(body) {
 			return nil, fmt.Errorf("security_quotes tail[%d] truncated", i)
 		}

@@ -2,6 +2,7 @@ package command
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"testing"
 
 	"github.com/quantbeing/tdx/codec"
@@ -38,6 +39,30 @@ func TestSecurityQuotesParserPreservesFiveLevelsAndUnknownFields(t *testing.T) {
 	}
 }
 
+func TestSecurityQuotesParserKeepsOffsetAcrossRecords(t *testing.T) {
+	body, err := hex.DecodeString("01130200013630303531398610a0aa0fba0abb0abc0ad905a1dc970ee0aa0f94b303ba07c6a6504fa1fa01b3b801ec0180a7314100040e480101014c320105543c0103573e01011603000000000000861000303030303031331299114a4c0651a8f5a60ed911a8ab8c01ad8301af3e984e9fd93d89d24e00b189040001be66af3a4102af2aa2444203a249a233430498308c694405ae1e90b40196080000000000003312")
+	if err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	reply, err := NewSecurityQuotesCommand([]model.Symbol{
+		{Market: model.MarketSH, Code: "600519"},
+		{Market: model.MarketSZ, Code: "000001"},
+	}).ParseResponse(body)
+	if err != nil {
+		t.Fatalf("ParseResponse: %v", err)
+	}
+	quotes := reply.([]model.Quote)
+	if len(quotes) != 2 {
+		t.Fatalf("len(quotes) = %d, want 2", len(quotes))
+	}
+	if quotes[1].Market != model.MarketSZ || quotes[1].Code != "000001" {
+		t.Fatalf("second quote = %+v", quotes[1])
+	}
+	if len(quotes[1].Raw) == 0 || quotes[1].Raw[0] != byte(model.MarketSZ) {
+		t.Fatalf("second raw starts with %x", quotes[1].Raw[:minInt(len(quotes[1].Raw), 8)])
+	}
+}
+
 func buildQuoteBody(t *testing.T) []byte {
 	t.Helper()
 	body := []byte{0xb1, 0xcb}
@@ -69,4 +94,11 @@ func buildQuoteBody(t *testing.T) []byte {
 		t.Fatal("empty quote record")
 	}
 	return body
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

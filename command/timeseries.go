@@ -60,6 +60,12 @@ func parseMinuteBody(body []byte, skip int) ([]model.MinuteTime, error) {
 		return nil, fmt.Errorf("minute_time response truncated: %d < skip %d", len(body), skip)
 	}
 	count := int(binary.LittleEndian.Uint16(body[:2]))
+	if skip == 4 && hasMinuteSymbolPrefix(body, skip) {
+		skip = 65
+		if len(body) < skip {
+			return nil, fmt.Errorf("minute_time extended response truncated: %d < skip %d", len(body), skip)
+		}
+	}
 	pos := skip
 	lastPrice := 0
 	out := make([]model.MinuteTime, 0, count)
@@ -89,6 +95,22 @@ func parseMinuteBody(body []byte, skip int) ([]model.MinuteTime, error) {
 		})
 	}
 	return out, nil
+}
+
+func hasMinuteSymbolPrefix(body []byte, pos int) bool {
+	if pos+7 > len(body) {
+		return false
+	}
+	market := body[pos]
+	if market != byte(model.MarketSZ) && market != byte(model.MarketSH) && market != byte(model.MarketBJ) {
+		return false
+	}
+	for _, b := range body[pos+1 : pos+7] {
+		if b < '0' || b > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 type TransactionDataCommand struct {

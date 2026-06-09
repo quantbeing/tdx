@@ -38,6 +38,31 @@ func TestHistoryMinuteTimeParserSkipsHistoryPrefix(t *testing.T) {
 	}
 }
 
+func TestMinuteTimeParserSkipsLiveSymbolPrefix(t *testing.T) {
+	body := make([]byte, 65)
+	binary.LittleEndian.PutUint16(body[0:2], 2)
+	body[4] = byte(model.MarketSH)
+	copy(body[5:11], []byte("600519"))
+	for _, rec := range [][3]int{{125980, 0, 1134}, {-180, 0, 502}} {
+		body = append(body, codec.PutPrice(rec[0])...)
+		body = append(body, codec.PutPrice(rec[1])...)
+		body = append(body, codec.PutPrice(rec[2])...)
+	}
+
+	reply, err := NewMinuteTimeDataCommand(model.MarketSH, "600519").ParseResponse(body)
+	if err != nil {
+		t.Fatalf("ParseResponse: %v", err)
+	}
+	rows := reply.([]model.MinuteTime)
+	if len(rows) != 2 {
+		t.Fatalf("len(rows) = %d, want 2", len(rows))
+	}
+	if rows[0].Price.String() != "1259.8" || rows[0].Volume != 1134 ||
+		rows[1].Price.String() != "1258" || rows[1].Volume != 502 {
+		t.Fatalf("rows = %+v", rows)
+	}
+}
+
 func TestTransactionParserPreservesNumOrdersAndUnknownLast(t *testing.T) {
 	body := make([]byte, 0)
 	body = binary.LittleEndian.AppendUint16(body, 1)

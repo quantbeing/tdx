@@ -1,0 +1,2667 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-06-09T12:55:17.607963Z",
+  "operation": "minute_time",
+  "server": {
+    "name": "tdx-sh-170",
+    "host": "180.153.18.170",
+    "port": 7709
+  },
+  "attempt": 1,
+  "latency_ms": 37,
+  "header": {
+    "Unknown0": 7654321,
+    "Unknown1": 531228,
+    "Unknown2": 85786625,
+    "ZipSize": 1047,
+    "UnzipSize": 1109
+  },
+  "request_hex": "0c1b080001010e000e001d05010036303035313900000000",
+  "header_hex": "b1cb74001c1b080001001d0517045504",
+  "raw_body_hex": "789c15946b4c93771487fb3bfff76d694be51a613a4450810aad6de5222090967229506937f102a8c47db0669b8e411cc4c50172111087a35ce6e466199b30908c450127043710618c18d9608a01dd8cc4b9e8828b0bd987bd7e393939c9392779ce93f3422412215ca309d34696bbb675b90cc9aecbbe97fdc6b72f34ae59ea72b1f7b321c978a725bd7d15fd037886a2afb47a11b72619409a0efc5a76b1cfe5d234f5babda4a58bb82ab98d07ef948b5731568d6ea96a55ede0b4733e0e6e8cbdc82a735ec0abc47ea70b58de5a2f56fee556ced9e99ee7d77c377c2bd85d7451271dff8fbb4ca7c921bbccedae64a5d486415491b4942ba11554d2b778895f5927cdd1bcfc06e3579dbe23c3cf7c3fde9d9237b301f13c57cfbddfb4e62a57872ff85a6aa2118f61f12356c4ae60904ac4c56c968ab86bcc5c8a1d9db8420ec8aa59035a70dda9842d63883f4db241c4ce6000a7f180b5f11d5c19cc1a32aa3ec5ba0a3c85b503fb722a60cc0af7b69d8703f28d07a5ca64790d0ec93439a6307d4688222362889da13e12f5713760e84119f43550efd2f9cc43abb56d09539d453934017ea1f57409810ea8e7504415c85005c4d52322c98ed064fff5e931ca496c0f7f089f5618445e76c8431f136a9060f573dbab36a4bfa9356d4b35a94f2ea09660f672cf0c49ddab7c8259fa4cc081c84d36dfa453bafd05dbcc13ac91329fa312dc2cc2dc0b834731c175907596f541fa1451f528081ac73d14c3f2945a8119aa85e70c34c6256a47e6eb12bb8980e0696ce7f236ed5fc179ecfe1dd11e77a0b3fe8810a7dc0d1e7388b1e66df62b541e7f46bde81418d5616776e4280eab0c853bb30b232f50d2087f30ad1507b22aa1cf528fe1bdc803ffb26e96f74418f7f623e1a43973d266b1ef4f0835dd123666fc815248a7583999c6d808f2a6b9563af24ad12d4919e76a48f127a214f7a81196057603892b88132fd0e7902e23a60f53dc304de2073648da8f8232c7b94132db36a44e0aa013ef22daf4370dc332452d885f12da1e520fe21785907e9fd551f2182b26a77f04c6865bac820c4bf40d92ef4b8af9d4d799f539cec0b6cab733d1222ba1b4c782a4fe4b88f6f938a81e8ba84554b66ffe4d54c3724c9db28046a49f0a97e56ee56d9b2db751044596b7a8308c3bb26557c1f643f3a882eb89e0751f0427fc827358f7a12ee1936248efc00e53fe0ecb8970af09e15ee651c11cc504ce227651d031d116eb3d8d1e88f605d35ea5eb9e10ff3dbaf5e6e81473ecb18ca8246be01be981f2b7220690720d717ea5a429462f7255769c5454c1e25c89045903c8d901a3a4019ecee72093c726bbd6e1a86b23a5e9db116f2c818bc10e6b8203305660ad5ee7272907e7de89c3f25688b826c8f952a4887b60e05aa0575431235f42f9890ed64c015f92495346474922bc9267824d4392ff01bafa55ac",
+  "body_hex": "f0000000013630303531398610a0aa0fba0abb0abc0ad905a1dc970ee0aa0f94b303ba07c6a6504fa1fa01b3b801ec0180a7314100040e480101014c32010516039cb00fa2cd02ae11f402e09c01b607c901dd638606fa01c58b01ab092dfa2ea30431d71da304c503f05b850cdc01f746b3089a01e82a950629ed1186049402da14a805ab011f8703d301aa02a6026ffc04a9028302a30aa9045489038402a001b9018a020984048202f3018902b201f401d603a602d702d80bbd0305fa08b40242ce05b3016bcb0b9d03b806d80495046d980eb60493019b0590029802bf13be06e2038003af01b90282068103d4028004b7034d840138a601af02a3010a8b0396019e01bb088203e801ba0583020ab9013ecf01b8018301dd03a005a40485014d3002442d8f011a8701ea0151a40158608701445b3618689101a3010b205e0929480b8d015f0a3060493541552c0d5537ba038802b00200b004bd0142ad018501418d012e4e321dd80131316825352d8c018601302621349502a20127a3012ed70180028701552d263f9501374794013448221b4f3d29ca013336e1011d9f0142001794010b34e502018d0145512111572e424f1c31492f4b492e7bdc019002014d17125a2c4b5729e701d402920242ce013923681f477e3259782f4dc80397025aef01890104d4013512792bc101c804a40251d403b00109ea013a95017828c601da01810150ea029f0101cf02900114cf013044e002a1015aea029f0103c201262bcd013304732359f301910154e3013b13d1013251c4012c08711e13d7013d5173242179296fec02ae01a601ea0193013c5c39c101622d42793c5c79399a0247bf055e4c9f015d5b8901415b2ec5016c395df803ab0373e701910153e202b20160d7099d061fcc013449c7029f0155e401840109cb03860249c503bf0173cd049f0267f70dab074ac6048d020deb013a0dda02970150dc03bd0146f3013f06dc02990109e8013db001cb04be02ca01c303b9023177285ac604b9024d681e4bca02a20146d3013b49f102be0150cb029e0143e0013f06e102ad0143df02ad014fdb03930248c503810208f5018d0142c703870242e002ac0148db0781054be002ac0151ef01880168fa05a10300df0382024ce504a90222e0013b1d7c289501df0190013a5c1f74c2018b01506e2e4adc0197014f7e360a712a05682450c90180010d5b180079350467254e78335fd8018a0110762b1a702b45d5018e011a7232457f810109d101940149743850763617c80189014dc10185010dc8018c013edf01b80146683e18cd01ad0100582b02572910562c2256321b4d3b4a4d3e6e553a475127194f270b5237b8014ab7013f218402308101ae01712d94017b0d8a01500c8901450a9601020ca30144079601140c8e010a0b3e48109301691097024c41a101434482010f4294015145a30101448701164132210786010412a601620b9f01000498010b0584014a06ad0142049e01410d8a03440582027446a3039d0226a50249308502690207000000ec01da01ba07",
+  "raw_body_size": 1047,
+  "body_size": 1109,
+  "parsed_json": [
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 1,
+        "Scale": 2
+      },
+      "Volume": 48,
+      "Unknown1": 54,
+      "Raw": "ATYw"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 49,
+        "Scale": 2
+      },
+      "Volume": 49,
+      "Unknown1": 53,
+      "Raw": "MDUx"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 106,
+        "Scale": 2
+      },
+      "Volume": 125600,
+      "Unknown1": 1030,
+      "Raw": "OYYQoKoP"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 804,
+        "Scale": 2
+      },
+      "Volume": 700,
+      "Unknown1": 699,
+      "Raw": "ugq7CrwK"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 459,
+        "Scale": 2
+      },
+      "Volume": -125600,
+      "Unknown1": 14874401,
+      "Raw": "2QWh3JcO4KoP"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 28319,
+        "Scale": 2
+      },
+      "Volume": -657798,
+      "Unknown1": 506,
+      "Raw": "lLMDugfGplA="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 28304,
+        "Scale": 2
+      },
+      "Volume": 11827,
+      "Unknown1": 16033,
+      "Raw": "T6H6AbO4AQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 28196,
+        "Scale": 2
+      },
+      "Volume": -1,
+      "Unknown1": 403904,
+      "Raw": "7AGApzFB"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 28196,
+        "Scale": 2
+      },
+      "Volume": 14,
+      "Unknown1": 4,
+      "Raw": "AAQO"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 28188,
+        "Scale": 2
+      },
+      "Volume": 1,
+      "Unknown1": 1,
+      "Raw": "SAEB"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 28189,
+        "Scale": 2
+      },
+      "Volume": 50,
+      "Unknown1": -12,
+      "Raw": "AUwy"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 28190,
+        "Scale": 2
+      },
+      "Volume": 22,
+      "Unknown1": 5,
+      "Raw": "AQUW"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 28193,
+        "Scale": 2
+      },
+      "Volume": 21346,
+      "Unknown1": 125980,
+      "Raw": "A5ywD6LNAg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 29327,
+        "Scale": 2
+      },
+      "Volume": -10016,
+      "Unknown1": -180,
+      "Raw": "rhH0AuCcAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 29829,
+        "Scale": 2
+      },
+      "Volume": -6365,
+      "Unknown1": -73,
+      "Raw": "tgfJAd1j"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 30219,
+        "Scale": 2
+      },
+      "Volume": -8901,
+      "Unknown1": -122,
+      "Raw": "hgb6AcWLAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 30838,
+        "Scale": 2
+      },
+      "Volume": -3002,
+      "Unknown1": 45,
+      "Raw": "qwkt+i4="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 31129,
+        "Scale": 2
+      },
+      "Volume": -1879,
+      "Unknown1": 49,
+      "Raw": "owQx1x0="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 31420,
+        "Scale": 2
+      },
+      "Volume": -5872,
+      "Unknown1": -197,
+      "Raw": "owTFA/Bb"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 32193,
+        "Scale": 2
+      },
+      "Volume": -4535,
+      "Unknown1": -92,
+      "Raw": "hQzcAfdG"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 32756,
+        "Scale": 2
+      },
+      "Volume": -2728,
+      "Unknown1": 90,
+      "Raw": "swiaAegq"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 33161,
+        "Scale": 2
+      },
+      "Volume": -1133,
+      "Unknown1": 41,
+      "Raw": "lQYp7RE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 33423,
+        "Scale": 2
+      },
+      "Volume": -1306,
+      "Unknown1": 148,
+      "Raw": "hgSUAtoU"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 33783,
+        "Scale": 2
+      },
+      "Volume": 31,
+      "Unknown1": 107,
+      "Raw": "qAWrAR8="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 33982,
+        "Scale": 2
+      },
+      "Volume": 170,
+      "Unknown1": -83,
+      "Raw": "hwPTAaoC"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 34148,
+        "Scale": 2
+      },
+      "Volume": -316,
+      "Unknown1": -47,
+      "Raw": "pgJv/AQ="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 34317,
+        "Scale": 2
+      },
+      "Volume": 675,
+      "Unknown1": 131,
+      "Raw": "qQKDAqMK"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 34614,
+        "Scale": 2
+      },
+      "Volume": 201,
+      "Unknown1": -20,
+      "Raw": "qQRUiQM="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 34746,
+        "Scale": 2
+      },
+      "Volume": 121,
+      "Unknown1": 96,
+      "Raw": "hAKgAbkB"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 34884,
+        "Scale": 2
+      },
+      "Volume": 260,
+      "Unknown1": 9,
+      "Raw": "igIJhAQ="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 35014,
+        "Scale": 2
+      },
+      "Volume": 137,
+      "Unknown1": -115,
+      "Raw": "ggLzAYkC"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 35128,
+        "Scale": 2
+      },
+      "Volume": -214,
+      "Unknown1": -116,
+      "Raw": "sgH0AdYD"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 35294,
+        "Scale": 2
+      },
+      "Volume": -728,
+      "Unknown1": -151,
+      "Raw": "pgLXAtgL"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 35547,
+        "Scale": 2
+      },
+      "Volume": -570,
+      "Unknown1": 5,
+      "Raw": "vQMF+gg="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 35727,
+        "Scale": 2
+      },
+      "Volume": -334,
+      "Unknown1": -2,
+      "Raw": "tAJCzgU="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 35842,
+        "Scale": 2
+      },
+      "Volume": -715,
+      "Unknown1": -43,
+      "Raw": "swFryws="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 36063,
+        "Scale": 2
+      },
+      "Volume": -280,
+      "Unknown1": 440,
+      "Raw": "nQO4BtgE"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 36340,
+        "Scale": 2
+      },
+      "Volume": 920,
+      "Unknown1": -45,
+      "Raw": "lQRtmA4="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 36650,
+        "Scale": 2
+      },
+      "Volume": 347,
+      "Unknown1": 83,
+      "Raw": "tgSTAZsF"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 36794,
+        "Scale": 2
+      },
+      "Volume": 1279,
+      "Unknown1": 152,
+      "Raw": "kAKYAr8T"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 37240,
+        "Scale": 2
+      },
+      "Volume": 192,
+      "Unknown1": -226,
+      "Raw": "vgbiA4AD"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 37351,
+        "Scale": 2
+      },
+      "Volume": 386,
+      "Unknown1": 185,
+      "Raw": "rwG5AoIG"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 37544,
+        "Scale": 2
+      },
+      "Volume": 256,
+      "Unknown1": -148,
+      "Raw": "gQPUAoAE"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 37791,
+        "Scale": 2
+      },
+      "Volume": 68,
+      "Unknown1": -13,
+      "Raw": "twNNhAE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 37847,
+        "Scale": 2
+      },
+      "Volume": 175,
+      "Unknown1": 102,
+      "Raw": "OKYBrwI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 37946,
+        "Scale": 2
+      },
+      "Volume": 203,
+      "Unknown1": 10,
+      "Raw": "owEKiwM="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 38032,
+        "Scale": 2
+      },
+      "Volume": 571,
+      "Unknown1": 94,
+      "Raw": "lgGeAbsI"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 38226,
+        "Scale": 2
+      },
+      "Volume": 378,
+      "Unknown1": -104,
+      "Raw": "ggPoAboF"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 38357,
+        "Scale": 2
+      },
+      "Volume": 121,
+      "Unknown1": 10,
+      "Raw": "gwIKuQE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 38419,
+        "Scale": 2
+      },
+      "Volume": 120,
+      "Unknown1": -79,
+      "Raw": "Ps8BuAE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 38486,
+        "Scale": 2
+      },
+      "Volume": 352,
+      "Unknown1": -221,
+      "Raw": "gwHdA6AF"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 38778,
+        "Scale": 2
+      },
+      "Volume": -13,
+      "Unknown1": 69,
+      "Raw": "pASFAU0="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 38826,
+        "Scale": 2
+      },
+      "Volume": -4,
+      "Unknown1": 2,
+      "Raw": "MAJE"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 38871,
+        "Scale": 2
+      },
+      "Volume": 26,
+      "Unknown1": 79,
+      "Raw": "LY8BGg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 38942,
+        "Scale": 2
+      },
+      "Volume": -17,
+      "Unknown1": -106,
+      "Raw": "hwHqAVE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39042,
+        "Scale": 2
+      },
+      "Volume": -32,
+      "Unknown1": -24,
+      "Raw": "pAFYYA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39113,
+        "Scale": 2
+      },
+      "Volume": -27,
+      "Unknown1": -4,
+      "Raw": "hwFEWw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39167,
+        "Scale": 2
+      },
+      "Volume": -40,
+      "Unknown1": 24,
+      "Raw": "Nhho"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39248,
+        "Scale": 2
+      },
+      "Volume": 11,
+      "Unknown1": 99,
+      "Raw": "kQGjAQs="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39280,
+        "Scale": 2
+      },
+      "Volume": 9,
+      "Unknown1": -30,
+      "Raw": "IF4J"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39321,
+        "Scale": 2
+      },
+      "Volume": 11,
+      "Unknown1": -8,
+      "Raw": "KUgL"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39398,
+        "Scale": 2
+      },
+      "Volume": 10,
+      "Unknown1": -31,
+      "Raw": "jQFfCg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39446,
+        "Scale": 2
+      },
+      "Volume": -9,
+      "Unknown1": -32,
+      "Raw": "MGBJ"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39499,
+        "Scale": 2
+      },
+      "Volume": -21,
+      "Unknown1": -1,
+      "Raw": "NUFV"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39543,
+        "Scale": 2
+      },
+      "Volume": -21,
+      "Unknown1": 13,
+      "Raw": "LA1V"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39598,
+        "Scale": 2
+      },
+      "Volume": 136,
+      "Unknown1": 250,
+      "Raw": "N7oDiAI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39774,
+        "Scale": 2
+      },
+      "Volume": 304,
+      "Unknown1": 0,
+      "Raw": "sAIAsAQ="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39899,
+        "Scale": 2
+      },
+      "Volume": 109,
+      "Unknown1": -2,
+      "Raw": "vQFCrQE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 39968,
+        "Scale": 2
+      },
+      "Volume": 77,
+      "Unknown1": -1,
+      "Raw": "hQFBjQE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40014,
+        "Scale": 2
+      },
+      "Volume": 50,
+      "Unknown1": -14,
+      "Raw": "Lk4y"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40043,
+        "Scale": 2
+      },
+      "Volume": 49,
+      "Unknown1": -88,
+      "Raw": "HdgBMQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40092,
+        "Scale": 2
+      },
+      "Volume": 37,
+      "Unknown1": -40,
+      "Raw": "MWgl"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40145,
+        "Scale": 2
+      },
+      "Volume": 76,
+      "Unknown1": 45,
+      "Raw": "NS2MAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40215,
+        "Scale": 2
+      },
+      "Volume": 38,
+      "Unknown1": 48,
+      "Raw": "hgEwJg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40248,
+        "Scale": 2
+      },
+      "Volume": 149,
+      "Unknown1": 52,
+      "Raw": "ITSVAg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40346,
+        "Scale": 2
+      },
+      "Volume": 99,
+      "Unknown1": 39,
+      "Raw": "ogEnowE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40392,
+        "Scale": 2
+      },
+      "Volume": 128,
+      "Unknown1": -87,
+      "Raw": "LtcBgAI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40463,
+        "Scale": 2
+      },
+      "Volume": 45,
+      "Unknown1": -21,
+      "Raw": "hwFVLQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40501,
+        "Scale": 2
+      },
+      "Volume": 85,
+      "Unknown1": 63,
+      "Raw": "Jj+VAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40556,
+        "Scale": 2
+      },
+      "Volume": 84,
+      "Unknown1": -7,
+      "Raw": "N0eUAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40608,
+        "Scale": 2
+      },
+      "Volume": 34,
+      "Unknown1": -8,
+      "Raw": "NEgi"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40635,
+        "Scale": 2
+      },
+      "Volume": 61,
+      "Unknown1": -15,
+      "Raw": "G089"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40676,
+        "Scale": 2
+      },
+      "Volume": 51,
+      "Unknown1": -74,
+      "Raw": "KcoBMw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40730,
+        "Scale": 2
+      },
+      "Volume": 29,
+      "Unknown1": -97,
+      "Raw": "NuEBHQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40825,
+        "Scale": 2
+      },
+      "Volume": 0,
+      "Unknown1": -2,
+      "Raw": "nwFCAA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40848,
+        "Scale": 2
+      },
+      "Volume": 11,
+      "Unknown1": 84,
+      "Raw": "F5QBCw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40900,
+        "Scale": 2
+      },
+      "Volume": 1,
+      "Unknown1": -165,
+      "Raw": "NOUCAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 40977,
+        "Scale": 2
+      },
+      "Volume": -17,
+      "Unknown1": -5,
+      "Raw": "jQFFUQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41010,
+        "Scale": 2
+      },
+      "Volume": -23,
+      "Unknown1": 17,
+      "Raw": "IRFX"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41056,
+        "Scale": 2
+      },
+      "Volume": -15,
+      "Unknown1": -2,
+      "Raw": "LkJP"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41084,
+        "Scale": 2
+      },
+      "Volume": -9,
+      "Unknown1": 49,
+      "Raw": "HDFJ"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41131,
+        "Scale": 2
+      },
+      "Volume": -9,
+      "Unknown1": -11,
+      "Raw": "L0tJ"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41177,
+        "Scale": 2
+      },
+      "Volume": -92,
+      "Unknown1": -59,
+      "Raw": "LnvcAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41321,
+        "Scale": 2
+      },
+      "Volume": -13,
+      "Unknown1": 1,
+      "Raw": "kAIBTQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41344,
+        "Scale": 2
+      },
+      "Volume": -26,
+      "Unknown1": 18,
+      "Raw": "FxJa"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41388,
+        "Scale": 2
+      },
+      "Volume": -23,
+      "Unknown1": -11,
+      "Raw": "LEtX"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41429,
+        "Scale": 2
+      },
+      "Volume": -148,
+      "Unknown1": -103,
+      "Raw": "KecB1AI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41575,
+        "Scale": 2
+      },
+      "Volume": -78,
+      "Unknown1": -2,
+      "Raw": "kgJCzgE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41632,
+        "Scale": 2
+      },
+      "Volume": -40,
+      "Unknown1": 35,
+      "Raw": "OSNo"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41663,
+        "Scale": 2
+      },
+      "Volume": -62,
+      "Unknown1": -7,
+      "Raw": "H0d+"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41713,
+        "Scale": 2
+      },
+      "Volume": -56,
+      "Unknown1": -25,
+      "Raw": "Mll4"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41760,
+        "Scale": 2
+      },
+      "Volume": -200,
+      "Unknown1": -13,
+      "Raw": "L03IAw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41911,
+        "Scale": 2
+      },
+      "Volume": -111,
+      "Unknown1": -26,
+      "Raw": "lwJa7wE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 41984,
+        "Scale": 2
+      },
+      "Volume": -84,
+      "Unknown1": 4,
+      "Raw": "iQEE1AE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42037,
+        "Scale": 2
+      },
+      "Volume": -57,
+      "Unknown1": 18,
+      "Raw": "NRJ5"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42080,
+        "Scale": 2
+      },
+      "Volume": -264,
+      "Unknown1": -65,
+      "Raw": "K8EByAQ="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42244,
+        "Scale": 2
+      },
+      "Volume": -212,
+      "Unknown1": -17,
+      "Raw": "pAJR1AM="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42356,
+        "Scale": 2
+      },
+      "Volume": -106,
+      "Unknown1": 9,
+      "Raw": "sAEJ6gE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42414,
+        "Scale": 2
+      },
+      "Volume": -56,
+      "Unknown1": 85,
+      "Raw": "OpUBeA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42454,
+        "Scale": 2
+      },
+      "Volume": -90,
+      "Unknown1": -70,
+      "Raw": "KMYB2gE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42519,
+        "Scale": 2
+      },
+      "Volume": -170,
+      "Unknown1": -16,
+      "Raw": "gQFQ6gI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42614,
+        "Scale": 2
+      },
+      "Volume": -143,
+      "Unknown1": 1,
+      "Raw": "nwEBzwI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42694,
+        "Scale": 2
+      },
+      "Volume": -79,
+      "Unknown1": 20,
+      "Raw": "kAEUzwE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42742,
+        "Scale": 2
+      },
+      "Volume": -160,
+      "Unknown1": -4,
+      "Raw": "METgAg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42839,
+        "Scale": 2
+      },
+      "Volume": -170,
+      "Unknown1": -26,
+      "Raw": "oQFa6gI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42934,
+        "Scale": 2
+      },
+      "Volume": -66,
+      "Unknown1": 3,
+      "Raw": "nwEDwgE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 42972,
+        "Scale": 2
+      },
+      "Volume": -77,
+      "Unknown1": 43,
+      "Raw": "JivNAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43023,
+        "Scale": 2
+      },
+      "Volume": -51,
+      "Unknown1": 4,
+      "Raw": "MwRz"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43058,
+        "Scale": 2
+      },
+      "Volume": -115,
+      "Unknown1": -25,
+      "Raw": "I1nzAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43139,
+        "Scale": 2
+      },
+      "Volume": -99,
+      "Unknown1": -20,
+      "Raw": "kQFU4wE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43198,
+        "Scale": 2
+      },
+      "Volume": -81,
+      "Unknown1": 19,
+      "Raw": "OxPRAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43248,
+        "Scale": 2
+      },
+      "Volume": -68,
+      "Unknown1": -17,
+      "Raw": "MlHEAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43292,
+        "Scale": 2
+      },
+      "Volume": -49,
+      "Unknown1": 8,
+      "Raw": "LAhx"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43322,
+        "Scale": 2
+      },
+      "Volume": -87,
+      "Unknown1": 19,
+      "Raw": "HhPXAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43383,
+        "Scale": 2
+      },
+      "Volume": -51,
+      "Unknown1": -17,
+      "Raw": "PVFz"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43419,
+        "Scale": 2
+      },
+      "Volume": -57,
+      "Unknown1": 33,
+      "Raw": "JCF5"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43460,
+        "Scale": 2
+      },
+      "Volume": -172,
+      "Unknown1": -47,
+      "Raw": "KW/sAg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43570,
+        "Scale": 2
+      },
+      "Volume": -106,
+      "Unknown1": 102,
+      "Raw": "rgGmAeoB"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43653,
+        "Scale": 2
+      },
+      "Volume": -28,
+      "Unknown1": 60,
+      "Raw": "kwE8XA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43710,
+        "Scale": 2
+      },
+      "Volume": -34,
+      "Unknown1": -65,
+      "Raw": "OcEBYg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43755,
+        "Scale": 2
+      },
+      "Volume": -57,
+      "Unknown1": -2,
+      "Raw": "LUJ5"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43815,
+        "Scale": 2
+      },
+      "Volume": -57,
+      "Unknown1": -28,
+      "Raw": "PFx5"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 43872,
+        "Scale": 2
+      },
+      "Volume": -7,
+      "Unknown1": 154,
+      "Raw": "OZoCRw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 44255,
+        "Scale": 2
+      },
+      "Volume": -12,
+      "Unknown1": -30,
+      "Raw": "vwVeTA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 44350,
+        "Scale": 2
+      },
+      "Volume": -27,
+      "Unknown1": -29,
+      "Raw": "nwFdWw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 44423,
+        "Scale": 2
+      },
+      "Volume": -27,
+      "Unknown1": -1,
+      "Raw": "iQFBWw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 44469,
+        "Scale": 2
+      },
+      "Volume": -44,
+      "Unknown1": -69,
+      "Raw": "LsUBbA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 44526,
+        "Scale": 2
+      },
+      "Volume": -248,
+      "Unknown1": -29,
+      "Raw": "OV34Aw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 44761,
+        "Scale": 2
+      },
+      "Volume": -103,
+      "Unknown1": -51,
+      "Raw": "qwNz5wE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 44842,
+        "Scale": 2
+      },
+      "Volume": -162,
+      "Unknown1": -19,
+      "Raw": "kQFT4gI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 44956,
+        "Scale": 2
+      },
+      "Volume": -599,
+      "Unknown1": -32,
+      "Raw": "sgFg1wk="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 45369,
+        "Scale": 2
+      },
+      "Volume": -76,
+      "Unknown1": 31,
+      "Raw": "nQYfzAE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 45421,
+        "Scale": 2
+      },
+      "Volume": -135,
+      "Unknown1": -9,
+      "Raw": "NEnHAg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 45516,
+        "Scale": 2
+      },
+      "Volume": -100,
+      "Unknown1": -21,
+      "Raw": "nwFV5AE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 45584,
+        "Scale": 2
+      },
+      "Volume": -203,
+      "Unknown1": 9,
+      "Raw": "hAEJywM="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 45718,
+        "Scale": 2
+      },
+      "Volume": -197,
+      "Unknown1": -9,
+      "Raw": "hgJJxQM="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 45845,
+        "Scale": 2
+      },
+      "Volume": -269,
+      "Unknown1": -51,
+      "Raw": "vwFzzQQ="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 46004,
+        "Scale": 2
+      },
+      "Volume": -887,
+      "Unknown1": -39,
+      "Raw": "nwJn9w0="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 46495,
+        "Scale": 2
+      },
+      "Volume": -262,
+      "Unknown1": -10,
+      "Raw": "qwdKxgQ="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 46636,
+        "Scale": 2
+      },
+      "Volume": -107,
+      "Unknown1": 13,
+      "Raw": "jQIN6wE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 46694,
+        "Scale": 2
+      },
+      "Volume": -154,
+      "Unknown1": 13,
+      "Raw": "Og3aAg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 46781,
+        "Scale": 2
+      },
+      "Volume": -220,
+      "Unknown1": -16,
+      "Raw": "lwFQ3AM="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 46906,
+        "Scale": 2
+      },
+      "Volume": -115,
+      "Unknown1": -6,
+      "Raw": "vQFG8wE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 46969,
+        "Scale": 2
+      },
+      "Volume": -156,
+      "Unknown1": 6,
+      "Raw": "PwbcAg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 47058,
+        "Scale": 2
+      },
+      "Volume": -104,
+      "Unknown1": 9,
+      "Raw": "mQEJ6AE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 47119,
+        "Scale": 2
+      },
+      "Volume": -267,
+      "Unknown1": 112,
+      "Raw": "PbABywQ="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 47309,
+        "Scale": 2
+      },
+      "Volume": -195,
+      "Unknown1": -74,
+      "Raw": "vgLKAcMD"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 47494,
+        "Scale": 2
+      },
+      "Volume": -55,
+      "Unknown1": 49,
+      "Raw": "uQIxdw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 47534,
+        "Scale": 2
+      },
+      "Volume": -262,
+      "Unknown1": -26,
+      "Raw": "KFrGBA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 47719,
+        "Scale": 2
+      },
+      "Volume": -40,
+      "Unknown1": -13,
+      "Raw": "uQJNaA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 47749,
+        "Scale": 2
+      },
+      "Volume": -138,
+      "Unknown1": -11,
+      "Raw": "HkvKAg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 47847,
+        "Scale": 2
+      },
+      "Volume": -83,
+      "Unknown1": -6,
+      "Raw": "ogFG0wE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 47906,
+        "Scale": 2
+      },
+      "Volume": -177,
+      "Unknown1": -9,
+      "Raw": "O0nxAg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 48032,
+        "Scale": 2
+      },
+      "Volume": -139,
+      "Unknown1": -16,
+      "Raw": "vgFQywI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 48126,
+        "Scale": 2
+      },
+      "Volume": -96,
+      "Unknown1": -3,
+      "Raw": "ngFD4AE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 48189,
+        "Scale": 2
+      },
+      "Volume": -161,
+      "Unknown1": 6,
+      "Raw": "PwbhAg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 48298,
+        "Scale": 2
+      },
+      "Volume": -159,
+      "Unknown1": -3,
+      "Raw": "rQFD3wI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 48407,
+        "Scale": 2
+      },
+      "Volume": -219,
+      "Unknown1": -15,
+      "Raw": "rQFP2wM="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 48554,
+        "Scale": 2
+      },
+      "Volume": -197,
+      "Unknown1": -8,
+      "Raw": "kwJIxQM="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 48683,
+        "Scale": 2
+      },
+      "Volume": -117,
+      "Unknown1": 8,
+      "Raw": "gQII9QE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 48760,
+        "Scale": 2
+      },
+      "Volume": -199,
+      "Unknown1": -2,
+      "Raw": "jQFCxwM="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 48895,
+        "Scale": 2
+      },
+      "Volume": -160,
+      "Unknown1": -2,
+      "Raw": "hwJC4AI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 49003,
+        "Scale": 2
+      },
+      "Volume": -475,
+      "Unknown1": -8,
+      "Raw": "rAFI2wc="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 49324,
+        "Scale": 2
+      },
+      "Volume": -160,
+      "Unknown1": -11,
+      "Raw": "gQVL4AI="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 49432,
+        "Scale": 2
+      },
+      "Volume": -111,
+      "Unknown1": -17,
+      "Raw": "rAFR7wE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 49504,
+        "Scale": 2
+      },
+      "Volume": -378,
+      "Unknown1": -40,
+      "Raw": "iAFo+gU="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 49729,
+        "Scale": 2
+      },
+      "Volume": -223,
+      "Unknown1": 0,
+      "Raw": "oQMA3wM="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 49859,
+        "Scale": 2
+      },
+      "Volume": -293,
+      "Unknown1": -12,
+      "Raw": "ggJM5QQ="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50028,
+        "Scale": 2
+      },
+      "Volume": -96,
+      "Unknown1": 34,
+      "Raw": "qQIi4AE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50087,
+        "Scale": 2
+      },
+      "Volume": -60,
+      "Unknown1": 29,
+      "Raw": "Ox18"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50127,
+        "Scale": 2
+      },
+      "Volume": -95,
+      "Unknown1": 85,
+      "Raw": "KJUB3wE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50207,
+        "Scale": 2
+      },
+      "Volume": -28,
+      "Unknown1": 58,
+      "Raw": "kAE6XA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50238,
+        "Scale": 2
+      },
+      "Volume": -66,
+      "Unknown1": -52,
+      "Raw": "H3TCAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50313,
+        "Scale": 2
+      },
+      "Volume": -46,
+      "Unknown1": -16,
+      "Raw": "iwFQbg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50359,
+        "Scale": 2
+      },
+      "Volume": -92,
+      "Unknown1": -10,
+      "Raw": "LkrcAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50446,
+        "Scale": 2
+      },
+      "Volume": -62,
+      "Unknown1": -15,
+      "Raw": "lwFPfg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50500,
+        "Scale": 2
+      },
+      "Volume": -49,
+      "Unknown1": 10,
+      "Raw": "Ngpx"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50542,
+        "Scale": 2
+      },
+      "Volume": -40,
+      "Unknown1": 5,
+      "Raw": "KgVo"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50578,
+        "Scale": 2
+      },
+      "Volume": -73,
+      "Unknown1": -16,
+      "Raw": "JFDJAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50642,
+        "Scale": 2
+      },
+      "Volume": -27,
+      "Unknown1": 13,
+      "Raw": "gAENWw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50666,
+        "Scale": 2
+      },
+      "Volume": -57,
+      "Unknown1": 0,
+      "Raw": "GAB5"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50719,
+        "Scale": 2
+      },
+      "Volume": -39,
+      "Unknown1": 4,
+      "Raw": "NQRn"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50756,
+        "Scale": 2
+      },
+      "Volume": -56,
+      "Unknown1": -14,
+      "Raw": "JU54"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50807,
+        "Scale": 2
+      },
+      "Volume": -88,
+      "Unknown1": -31,
+      "Raw": "M1/YAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50881,
+        "Scale": 2
+      },
+      "Volume": -54,
+      "Unknown1": 16,
+      "Raw": "igEQdg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50924,
+        "Scale": 2
+      },
+      "Volume": -48,
+      "Unknown1": 26,
+      "Raw": "Kxpw"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 50967,
+        "Scale": 2
+      },
+      "Volume": -85,
+      "Unknown1": -5,
+      "Raw": "K0XVAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51045,
+        "Scale": 2
+      },
+      "Volume": -50,
+      "Unknown1": 26,
+      "Raw": "jgEacg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51095,
+        "Scale": 2
+      },
+      "Volume": -63,
+      "Unknown1": -5,
+      "Raw": "MkV/"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51160,
+        "Scale": 2
+      },
+      "Volume": -81,
+      "Unknown1": 9,
+      "Raw": "gQEJ0QE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51244,
+        "Scale": 2
+      },
+      "Volume": -52,
+      "Unknown1": -9,
+      "Raw": "lAFJdA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51300,
+        "Scale": 2
+      },
+      "Volume": -54,
+      "Unknown1": -16,
+      "Raw": "OFB2"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51354,
+        "Scale": 2
+      },
+      "Volume": -72,
+      "Unknown1": 23,
+      "Raw": "NhfIAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51427,
+        "Scale": 2
+      },
+      "Volume": -65,
+      "Unknown1": -13,
+      "Raw": "iQFNwQE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51496,
+        "Scale": 2
+      },
+      "Volume": -72,
+      "Unknown1": 13,
+      "Raw": "hQENyAE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51572,
+        "Scale": 2
+      },
+      "Volume": -95,
+      "Unknown1": 62,
+      "Raw": "jAE+3wE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51692,
+        "Scale": 2
+      },
+      "Volume": -40,
+      "Unknown1": -6,
+      "Raw": "uAFGaA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51754,
+        "Scale": 2
+      },
+      "Volume": -77,
+      "Unknown1": 24,
+      "Raw": "PhjNAQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51863,
+        "Scale": 2
+      },
+      "Volume": -24,
+      "Unknown1": 0,
+      "Raw": "rQEAWA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51906,
+        "Scale": 2
+      },
+      "Volume": -23,
+      "Unknown1": 2,
+      "Raw": "KwJX"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51947,
+        "Scale": 2
+      },
+      "Volume": -22,
+      "Unknown1": 16,
+      "Raw": "KRBW"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 51991,
+        "Scale": 2
+      },
+      "Volume": -22,
+      "Unknown1": 34,
+      "Raw": "LCJW"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52041,
+        "Scale": 2
+      },
+      "Volume": -13,
+      "Unknown1": 27,
+      "Raw": "MhtN"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52100,
+        "Scale": 2
+      },
+      "Volume": -13,
+      "Unknown1": -10,
+      "Raw": "O0pN"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52162,
+        "Scale": 2
+      },
+      "Volume": -21,
+      "Unknown1": -46,
+      "Raw": "Pm5V"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52220,
+        "Scale": 2
+      },
+      "Volume": -17,
+      "Unknown1": -7,
+      "Raw": "OkdR"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52259,
+        "Scale": 2
+      },
+      "Volume": -15,
+      "Unknown1": 25,
+      "Raw": "JxlP"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52298,
+        "Scale": 2
+      },
+      "Volume": -18,
+      "Unknown1": 11,
+      "Raw": "JwtS"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52353,
+        "Scale": 2
+      },
+      "Volume": -10,
+      "Unknown1": 120,
+      "Raw": "N7gBSg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52472,
+        "Scale": 2
+      },
+      "Volume": 33,
+      "Unknown1": 63,
+      "Raw": "twE/IQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52604,
+        "Scale": 2
+      },
+      "Volume": 65,
+      "Unknown1": 48,
+      "Raw": "hAIwgQE="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52714,
+        "Scale": 2
+      },
+      "Volume": 45,
+      "Unknown1": -49,
+      "Raw": "rgFxLQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52798,
+        "Scale": 2
+      },
+      "Volume": 13,
+      "Unknown1": -59,
+      "Raw": "lAF7DQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52872,
+        "Scale": 2
+      },
+      "Volume": 12,
+      "Unknown1": -16,
+      "Raw": "igFQDA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 52945,
+        "Scale": 2
+      },
+      "Volume": 10,
+      "Unknown1": -5,
+      "Raw": "iQFFCg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53031,
+        "Scale": 2
+      },
+      "Volume": 12,
+      "Unknown1": 2,
+      "Raw": "lgECDA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53130,
+        "Scale": 2
+      },
+      "Volume": 7,
+      "Unknown1": -4,
+      "Raw": "owFEBw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53216,
+        "Scale": 2
+      },
+      "Volume": 12,
+      "Unknown1": 20,
+      "Raw": "lgEUDA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53294,
+        "Scale": 2
+      },
+      "Volume": 11,
+      "Unknown1": 10,
+      "Raw": "jgEKCw=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53356,
+        "Scale": 2
+      },
+      "Volume": 16,
+      "Unknown1": -8,
+      "Raw": "PkgQ"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53439,
+        "Scale": 2
+      },
+      "Volume": 16,
+      "Unknown1": -41,
+      "Raw": "kwFpEA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53590,
+        "Scale": 2
+      },
+      "Volume": -1,
+      "Unknown1": -12,
+      "Raw": "lwJMQQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53687,
+        "Scale": 2
+      },
+      "Volume": -4,
+      "Unknown1": -3,
+      "Raw": "oQFDRA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53753,
+        "Scale": 2
+      },
+      "Volume": -2,
+      "Unknown1": 15,
+      "Raw": "ggEPQg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53837,
+        "Scale": 2
+      },
+      "Volume": -5,
+      "Unknown1": -17,
+      "Raw": "lAFRRQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 53936,
+        "Scale": 2
+      },
+      "Volume": -4,
+      "Unknown1": 1,
+      "Raw": "owEBRA=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 54007,
+        "Scale": 2
+      },
+      "Volume": -1,
+      "Unknown1": 22,
+      "Raw": "hwEWQQ=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 54057,
+        "Scale": 2
+      },
+      "Volume": 7,
+      "Unknown1": 33,
+      "Raw": "MiEH"
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 54127,
+        "Scale": 2
+      },
+      "Volume": 18,
+      "Unknown1": 4,
+      "Raw": "hgEEEg=="
+    },
+    {
+      "Hour": 0,
+      "Minute": 0,
+      "Price": {
+        "Mantissa": 54229,
+        "Scale": 2
+      },
+      "Volume": 11,
+      "Unknown1": -34,
+      "Raw": "pgFiCw=="
+    }
+  ]
+}
