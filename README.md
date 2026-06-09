@@ -1,77 +1,517 @@
 # tdx
 
-New Go implementation of the TongDaXin HQ TCP protocol.
+`github.com/quantbeing/tdx` 是一个全新的 Go 版通达信 HQ `7709` TCP 私有协议库。
 
-This repository does not wrap gotdx. It implements the protocol directly with:
+它不是 gotdx wrapper。当前实现直接处理通达信 TCP 连接、三段 setup、16 字节响应 header、zlib 解压、GBK 文本、价格 varint、TDX 自定义 volume float，以及各类命令的二进制 build/parse。
 
-- TCP setup and response frame decoding.
-- GBK, price-varint, volume, and datetime codecs.
-- Core commands for security count/list, stock/index K-lines, realtime five-level quotes, minute time, transactions, finance info, xdxr info, company info, history fund-flow category 22, and block/report files.
-- Canonical helpers for market statistics and fund-flow aggregation.
-- Request-level host failover and operation health checks.
-- Operation-aware circuit breaker with per-operation cooldown and `OperationStats`.
-- Per-host idle connection pool; successful connections are reused and failed connections are discarded.
-- Request observer hooks and a built-in metrics collector for operation/host latency, failures, retries, and row counts.
-- Scriptable fake TDX server for timeout, slow response, partial frame, bad zlib, disconnect, and failover tests.
-- Heartbeat manager for long-lived transports.
-- Raw byte preservation for protocol auditing.
+这个仓库可以作为两类东西使用：
+
+- Go 第三方库：业务系统直接 `import "github.com/quantbeing/tdx"` 调用行情、K 线、快照、分时、逐笔、财务、板块、报表等接口。
+- 协议诊断工具：用 `tdx-health`、`tdx-probe`、`tdx-fixture-matrix`、`tdx-dump-frame`、`tdx-compare-py` 做公网节点探测、raw fixture 抓取、Python 对照和协议反推。
+
+当前仍是 v0 阶段，接口已经按稳定 API 方向组织，但通达信公网服务器和非官方协议本身存在不稳定性。生产接入时请保留超时、重试、host failover、fixture 对照和运行指标。
+
+## Install
+
+仓库 push 到 GitHub 后，其他项目可以直接使用：
+
+```bash
+go get github.com/quantbeing/tdx
+```
+
+本地联调时可以在业务项目的 `go.mod` 里临时加：
+
+```go
+replace github.com/quantbeing/tdx => /Users/liuhanqing01/projects/tdx
+```
 
 ## Quick Start
 
 ```go
-client := tdx.NewClient(tdx.Options{})
-count, err := client.GetSecurityCount(context.Background(), model.MarketSH)
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+
+    tdx "github.com/quantbeing/tdx"
+    "github.com/quantbeing/tdx/model"
+)
+
+func main() {
+    ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+    defer cancel()
+
+    client := tdx.NewClient(tdx.Options{})
+    defer client.Close()
+
+    count, err := client.GetSecurityCount(ctx, model.MarketSH)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println("SH security count:", count)
+}
 ```
 
+默认配置会使用内置通达信公网服务器种子、每 host 1 条 idle 连接、请求级 host failover、operation-aware 熔断冷却。
+
+## Client Options
+
 ```go
+metrics := tdx.NewMetricsCollector()
+
 client := tdx.NewClient(tdx.Options{
+    Servers: []model.Server{
+        {Name: "tdx-sh-170", Host: "180.153.18.170", Port: 7709},
+        {Name: "tdx-sh-171", Host: "180.153.18.171", Port: 7709},
+    },
+    Timeout:     8 * time.Second,
+    MaxAttempts: 2,
+    Transport: tdx.TransportOptions{
+        ConnectTimeout: 5 * time.Second,
+        ReadTimeout:    8 * time.Second,
+        WriteTimeout:   5 * time.Second,
+    },
     Pool: tdx.PoolOptions{
         MaxIdlePerHost: 2,
     },
     CircuitBreaker: tdx.CircuitBreakerOptions{
         FailureThreshold: 2,
-        Cooldown: 30 * time.Second,
+        Cooldown:         30 * time.Second,
     },
+    Observer: metrics,
 })
-stats := client.OperationStats("security_list")
+defer client.Close()
 ```
+
+字段说明：
+
+| Option | 用途 |
+|---|---|
+| `Servers` | 自定义通达信服务器列表；为空时使用 `KnownServers()`。 |
+| `Timeout` | 默认总超时，同时会填充未设置的 connect/read/write timeout。 |
+| `MaxAttempts` | 单次请求最多尝试多少个 host；默认等于 server 数量。 |
+| `Transport` | TCP connect/read/write timeout。 |
+| `Pool` | per-host idle 连接池。成功连接会复用，失败连接会关闭。 |
+| `CircuitBreaker` | operation-aware 熔断。同一 host 某个 operation 失败进入冷却，不影响该 host 的其他 operation。 |
+| `Observer` | 每次 request attempt 的事件 hook，可接日志、metrics、OpenTelemetry bridge。 |
+
+## Markets And Categories
+
+市场：
+
+```go
+model.MarketSH // 上海
+model.MarketSZ // 深圳
+model.MarketBJ // 北京
+```
+
+K 线周期：
+
+```go
+model.KlineMinute1
+model.KlineMinute3
+model.KlineMinute5
+model.KlineMinute15
+model.KlineMinute30
+model.KlineMinute60
+model.KlineDay
+model.KlineWeek
+model.KlineMonth
+model.KlineSeason
+model.KlineYear
+```
+
+证券标识：
+
+```go
+symbols := []model.Symbol{
+    {Market: model.MarketSH, Code: "600519"},
+    {Market: model.MarketSZ, Code: "000001"},
+}
+```
+
+## API Usage
+
+### Health And Server Selection
+
+```go
+servers := tdx.KnownServers()
+results := tdx.PingAll(ctx, servers, tdx.TransportOptions{ConnectTimeout: 3 * time.Second})
+
+client, err := tdx.FromBestHost(ctx, tdx.Options{Servers: servers})
+if err != nil {
+    // 没有 host 能完成 TCP/setup。
+}
+defer client.Close()
+
+err = client.Ping(ctx)
+stats := client.ServerStats()
+opStats := client.OperationStats("security_list")
+```
+
+`PingAll` 只证明 TCP/setup 可用。某个 host 能 ping 通，不代表它能稳定返回所有 operation。业务系统应优先看 `OperationStats` 和 `Observer` 指标。
+
+### Securities
+
+```go
+count, err := client.GetSecurityCount(ctx, model.MarketSH)
+
+page, err := client.GetSecurityList(ctx, model.MarketSH, 0)
+
+all, err := client.ListSecurities(ctx, model.MarketSH, model.MarketSZ, model.MarketBJ)
+if err != nil {
+    // all.Failures 会保留 partial failure 信息。
+}
+
+ashares, err := client.ListAShares(ctx)
+markets := client.ListMarkets(ctx)
+```
+
+返回类型：
+
+- `[]model.Security`
+- `model.PartialResult[model.Security]`
+
+`ListSecurities` 会分页拉取，遇到部分市场失败时返回 typed partial result，不会静默丢失败信息。
+
+### K Lines
+
+```go
+bars, err := client.GetSecurityBars(ctx, model.MarketSH, "600519", model.KlineDay, 0, 800)
+
+indexBars, err := client.GetIndexBars(ctx, model.MarketSH, "000001", model.KlineDay, 0, 800)
+
+autoBars, err := client.GetBars(ctx, model.MarketSH, "000001", model.KlineDay, 0, 800)
+```
+
+返回类型：`[]model.Bar`
+
+`GetBars` 会根据 code 做股票/指数路由。K 线价格使用 `model.Decimal` 保存，避免 float 精度污染：
+
+```go
+fmt.Println(bars[0].Close.String())
+fmt.Println(bars[0].Close.Float64())
+```
+
+### Quotes And Snapshot
+
+```go
+quotes, err := client.GetSecurityQuotes(ctx, []model.Symbol{
+    {Market: model.MarketSH, Code: "600519"},
+    {Market: model.MarketSZ, Code: "000001"},
+})
+
+snapshot, err := client.GetSnapshot(ctx, symbols)
+```
+
+返回类型：`[]model.Quote`
+
+行为：
+
+- 自动按协议上限分片，当前每批最多 `command.MaxQuoteBatch` 个 symbol。
+- 保留五档买卖盘、成交量、成交额、涨速、server time、未知字段和 raw record。
+
+常用字段：
+
+```go
+q := quotes[0]
+fmt.Println(q.Code, q.Price.String(), q.Open.String(), q.High.String(), q.Low.String())
+fmt.Println(q.Bid[0].Price.String(), q.Bid[0].Volume)
+fmt.Println(q.Ask[0].Price.String(), q.Ask[0].Volume)
+```
+
+### Minute Time And Transactions
+
+```go
+minutes, err := client.GetMinuteTimeData(ctx, model.MarketSH, "600519")
+
+historyMinutes, err := client.GetHistoryMinuteTimeData(ctx, model.MarketSH, "600519", 20260609)
+
+txs, err := client.GetTransactionData(ctx, model.MarketSH, "600519", 0, 800)
+
+historyTxs, err := client.GetHistoryTransactionData(ctx, model.MarketSH, "600519", 20260609, 0, 800)
+```
+
+返回类型：
+
+- `[]model.MinuteTime`
+- `[]model.Transaction`
+
+逐笔成交会保留 `NumOrders`、`BuyOrSell`、`UnknownLast` 和 raw record，方便继续反推字段。
+
+### Market Stat And Fund Flow
+
+```go
+stat, err := client.GetMarketStat(ctx)
+
+flow, err := client.GetFundFlow(ctx, model.MarketSH, "600519")
+
+historyFlow, err := client.GetHistoryFundFlow(ctx, model.MarketSH, "600519", 0, 20)
+```
+
+返回类型：
+
+- `model.MarketStat`
+- `model.FundFlow`
+- `[]model.HistoricalFundFlow`
+
+注意：
+
+- `GetMarketStat` 是 canonical helper，基于 SH `880005` quote 派生。
+- 当日 `GetFundFlow` 基于 L1 逐笔成交按金额阈值聚合。
+- `GetHistoryFundFlow` 优先走 category 22 直连协议；若服务器空回包，则 fallback 到日 K 日期加历史逐笔成交重算。
+
+```go
+fmt.Println(flow.MainNetInflow())
+fmt.Println(flow.TotalNetInflow())
+```
+
+### Finance, XDXR, Company Info
+
+```go
+finance, err := client.GetFinanceInfo(ctx, model.MarketSH, "600519")
+
+xdxr, err := client.GetXdxrInfo(ctx, model.MarketSH, "600519")
+
+categories, err := client.GetCompanyInfoCategory(ctx, model.MarketSH, "600519")
+
+content, err := client.GetCompanyInfoContent(ctx, model.MarketSH, "600519", "600519.txt", 0, 4096)
+```
+
+返回类型：
+
+- `model.FinanceInfo`
+- `[]model.XdxrRecord`
+- `[]model.CompanyInfoCategory`
+- `[]byte`
+
+财务和 XDXR 解析借鉴并修复 pytdx/xmtdx 中已知问题：XDXR 记录头从当前 offset 读取，股本/股份类字段使用 TDX custom volume codec。
+
+### Boards And Report Files
+
+```go
+boards, err := client.ListBoards(ctx, "concept") // concept/style/industry/index
+
+members, err := client.ListBoardMembers(ctx, "某板块名称")
+
+blockFileBoards, err := client.GetBlockInfo(ctx, "block_gn.dat")
+
+baseInfoZip, err := client.GetReportFile(ctx, "base_info.zip")
+```
+
+返回类型：
+
+- `[]model.Board`
+- `[]string`
+- `[]byte`
+
+`GetBlockInfo` 会先读 metadata，再按 chunk 拉取板块文件并解析 `.dat`。`GetReportFile` 会按 chunk 拉取服务端文件，直到短 chunk 或达到安全上限。
+
+### Raw Capture For Protocol Auditing
+
+```go
+capture, err := client.Capture(ctx, command.NewSecurityQuotesCommand([]model.Symbol{
+    {Market: model.MarketSH, Code: "600519"},
+}))
+```
+
+`CapturedResponse` 会保留：
+
+- operation
+- server
+- attempt
+- latency
+- request bytes
+- 16-byte response header
+- raw compressed body
+- decoded body
+- parsed result
+
+可以写成 fixture：
+
+```go
+summary, err := diagnostic.WriteFixture("./fixtures/quote.fixture.json", capture)
+```
+
+## Observability
+
+### Observer Hook
+
+```go
+client := tdx.NewClient(tdx.Options{
+    Observer: tdx.ObserverFunc(func(event tdx.RequestEvent) {
+        fmt.Printf(
+            "op=%s host=%s attempt=%d ok=%v rows=%d latency=%s err=%s\n",
+            event.Operation,
+            event.Server.Addr(),
+            event.Attempt,
+            event.OK,
+            event.Rows,
+            event.Latency,
+            event.Error,
+        )
+    }),
+})
+```
+
+`RequestEvent` 字段：
+
+| Field | 含义 |
+|---|---|
+| `Operation` | command operation 名称，例如 `security_list`。 |
+| `Server` | 本次 attempt 使用的 host。 |
+| `Attempt` | 当前请求第几次尝试。 |
+| `OK` | attempt 是否成功。 |
+| `Error` | 失败错误文本。 |
+| `Latency` | attempt 耗时。 |
+| `Rows` | parsed result 行数，slice/array 才会计数。 |
+| `BodySize` | capture 路径下 decoded body 字节数。 |
+| `Reused` | 是否复用了 idle pool 连接。 |
+
+### Metrics Collector
 
 ```go
 metrics := tdx.NewMetricsCollector()
 client := tdx.NewClient(tdx.Options{Observer: metrics})
-_ = client.Ping(context.Background())
+
+_ = client.Ping(ctx)
 snapshots := metrics.Snapshot()
+for _, s := range snapshots {
+    fmt.Println(s.Operation, s.Server.Addr(), s.Attempts, s.Successes, s.Failures, s.TotalRows)
+}
 ```
 
-## Diagnostics
+聚合维度是 `operation + host`，可用于上层导出 Prometheus/OpenTelemetry/Grafana。
+
+## Diagnostics CLI
+
+### Host Health
 
 ```bash
 go run ./cmd/tdx-health
-go run ./cmd/tdx-probe -op security-count -market sh
-go run ./cmd/tdx-probe -op history-fund-flow -capture-dir ./fixtures/live
-TDX_LIVE=1 go run ./cmd/tdx-fixture-matrix -out ./fixtures/live -ops security-count,quote,history-fund-flow
-go run ./cmd/tdx-probe -op quote -capture-dir ./fixtures/live
-go run ./cmd/tdx-dump-frame -hex <header-plus-body>
-go run ./cmd/tdx-compare-py -go ./fixtures/live/<go.fixture.json> -py ./fixtures/pytdx/<py.json>
+go run ./cmd/tdx-health -hosts 180.153.18.170:7709,180.153.18.171:7709 -timeout 5s
 ```
 
-`tdx-probe -capture-dir` writes request bytes, the 16-byte response header, compressed/raw body bytes, decoded body bytes, and parsed JSON into a fixture file. `tdx-fixture-matrix` runs a live operation matrix and writes one JSONL summary row per operation; it requires `TDX_LIVE=1` unless `-allow-live` is set. `history-fund-flow` captures the category 22 direct response; `fund-flow` probes the transaction source used by client-side aggregation. `tdx-compare-py` compares either normal JSON files or Go fixture `parsed_json` output against pytdx/xmtdx reference JSON.
+### Operation Probe
 
-Live tests are intentionally separate from unit tests. Capture binary fixtures before expanding parsers for fund flow and extended-market commands.
+```bash
+go run ./cmd/tdx-probe -op security-count -market sh
+go run ./cmd/tdx-probe -op quote -capture-dir ./fixtures/live
+go run ./cmd/tdx-probe -op history-fund-flow -capture-dir ./fixtures/live
+```
+
+支持的 `-op`：
+
+```text
+security-count
+security-list
+stock-bars
+index-bars
+quote
+market-stat
+minute
+transaction
+fund-flow
+history-fund-flow
+finance
+xdxr
+company
+block-meta
+block
+report
+```
+
+### Live Fixture Matrix
+
+```bash
+TDX_LIVE=1 go run ./cmd/tdx-fixture-matrix \
+  -out ./fixtures/live \
+  -ops security-count,quote,history-fund-flow
+```
+
+输出 JSONL，一行一个 operation 结果。单个 operation 失败不会阻断后续 operation，适合收集公网节点能力矩阵。
+
+### Dump Raw Frame
+
+```bash
+go run ./cmd/tdx-dump-frame -hex <header-plus-body-hex>
+```
+
+### Compare With Python Reference
+
+```bash
+go run ./cmd/tdx-compare-py \
+  -go ./fixtures/live/<go.fixture.json> \
+  -py ./fixtures/pytdx/<py.json> \
+  -max-diffs 100 \
+  -tolerance 0.0001
+```
+
+`tdx-compare-py` 可以直接读取 Go fixture 的 `parsed_json` 字段，也可以比较普通 JSON 文件。
 
 ## Fault Tests
 
-`tdxtest.StartScript` can simulate protocol and network failures without touching public servers:
+`tdxtest.StartScript` 可以模拟协议和网络故障，不依赖公网服务器：
 
 ```go
 server, _ := tdxtest.StartScript(tdxtest.Script{
     Connections: []tdxtest.ConnectionScript{{
         Actions: []tdxtest.Action{
-            tdxtest.ReadAndRespond(nil),
-            tdxtest.ReadAndRespond(nil),
-            tdxtest.ReadAndRespond(nil),
+            tdxtest.ReadAndRespond(nil), // setup 1
+            tdxtest.ReadAndRespond(nil), // setup 2
+            tdxtest.ReadAndRespond(nil), // setup 3
             tdxtest.ReadAndBadZlib([]byte{1, 2, 3}, 8),
         },
     }},
 })
+defer server.Close()
 ```
+
+可用动作：
+
+| Action | 用途 |
+|---|---|
+| `ReadAndRespond(body)` | 读一个请求并返回正常 TDX frame。 |
+| `ReadAndRaw(raw)` | 读一个请求并返回原始字节。 |
+| `ReadAndBadZlib(raw, unzipSize)` | 返回 header 表示压缩，但 body 不是有效 zlib。 |
+| `ReadAndPartialFrame(partialBody, declaredZipSize)` | 返回半包后断开。 |
+| `ReadAndDelay(delay)` | 延迟。 |
+| `ReadAndClose()` | 读请求后断开。 |
+
+## Testing
+
+```bash
+go vet ./...
+go test -count=1 ./...
+```
+
+Live smoke：
+
+```bash
+go run ./cmd/tdx-probe -op security-count -market sh -timeout 5s
+```
+
+Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
+
+## Known Limits
+
+- 通达信 HQ 协议不是官方公开协议，字段含义需要通过 fixture 持续反推。
+- 公网 TDX 服务器按 operation/market 表现不一致，能握手不代表所有接口可用。
+- BJ 全量列表在公网节点上不稳定，目前通过 partial result 和 report/base info fallback 预留处理空间。
+- 更丰富的扩展市场接口仍在待解析状态。
+- 资金流中，当日资金流是逐笔成交聚合结果；历史资金流优先 category 22，空回包时 fallback 重算。
+
+## Agent Checklist
+
+给其他 RD 或 agent 接入时，按这个顺序走：
+
+1. 先运行 `go run ./cmd/tdx-health` 看当前网络下可用 host。
+2. 用 `tdx.NewClient(tdx.Options{})` 快速接入。
+3. 生产任务设置 `Timeout`、`MaxAttempts`、`Pool`、`CircuitBreaker`、`Observer`。
+4. 证券列表用 `ListSecurities` 或 `ListAShares`，读取 partial failures。
+5. 批量快照用 `GetSecurityQuotes`，它会自动分片。
+6. 需要反推协议字段时用 `Client.Capture` 或 `tdx-probe -capture-dir`。
+7. 和 pytdx/xmtdx 对照时用 `tdx-compare-py`。
+8. 遇到故障复现时用 `tdxtest.StartScript` 写 fake server 测试。
