@@ -36,6 +36,23 @@ func TestRunWritesIntegrityReportJSON(t *testing.T) {
 	}
 }
 
+func TestRunCanEnableFullSecurityListValidation(t *testing.T) {
+	var out bytes.Buffer
+	err := run([]string{
+		"-markets", "sh",
+		"-symbols", "sh:600519",
+		"-skip-boards",
+		"-skip-files",
+		"-full-security-list",
+	}, &out, fakeValidateClient{}, func(string) string { return "1" })
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.Contains(out.String(), `"security_list_SH_full"`) {
+		t.Fatalf("output = %s", out.String())
+	}
+}
+
 func TestParseSymbolsRejectsBadToken(t *testing.T) {
 	_, err := parseSymbols("sh600519")
 	if err == nil || !strings.Contains(err.Error(), "market:code") {

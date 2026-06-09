@@ -26,6 +26,32 @@ func TestValidateSecuritiesReportsMalformedRows(t *testing.T) {
 	}
 }
 
+func TestValidateSecurityUniverseChecksCountAndDuplicates(t *testing.T) {
+	result := ValidateSecurityUniverse("security_list_SH_full", model.MarketSH, 3, []model.Security{
+		{Market: model.MarketSH, Code: "600519", Name: "贵州茅台", DecimalPoint: 2, Raw: make([]byte, 29)},
+		{Market: model.MarketSH, Code: "600519", Name: "贵州茅台", DecimalPoint: 2, Raw: make([]byte, 29)},
+	})
+
+	if result.OK {
+		t.Fatalf("result unexpectedly OK: %+v", result)
+	}
+	if result.Rows != 2 {
+		t.Fatalf("rows = %d, want 2", result.Rows)
+	}
+	var sawCount, sawDuplicate bool
+	for _, finding := range result.Findings {
+		if finding.Field == "rows" {
+			sawCount = true
+		}
+		if finding.Field == "duplicate" {
+			sawDuplicate = true
+		}
+	}
+	if !sawCount || !sawDuplicate {
+		t.Fatalf("findings = %+v, want count and duplicate findings", result.Findings)
+	}
+}
+
 func TestValidateQuotesChecksRequestedSymbolsAndRawRecords(t *testing.T) {
 	requested := []model.Symbol{
 		{Market: model.MarketSH, Code: "600519"},

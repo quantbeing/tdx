@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -65,16 +66,72 @@ func TestRunLiveUsesPerOperationTimeout(t *testing.T) {
 	}
 }
 
+func TestRunLiveCanValidateFullSecurityListPagination(t *testing.T) {
+	client := fakeLiveClient{
+		securityCount: 1001,
+		securityPages: map[int][]model.Security{
+			0:    makeSecurities(model.MarketSH, 0, 1000),
+			1000: makeSecurities(model.MarketSH, 1000, 1),
+		},
+	}
+	report := RunLive(context.Background(), client, LiveOptions{
+		Markets:          []model.Market{model.MarketSH},
+		Symbols:          []model.Symbol{{Market: model.MarketSH, Code: "600519"}},
+		FullSecurityList: true,
+		SkipBoards:       true,
+		SkipReportFiles:  true,
+	})
+
+	result, ok := findResult(report, "security_list_SH_full")
+	if !ok {
+		t.Fatalf("missing full security list result: %+v", report.Results)
+	}
+	if !result.OK || result.Rows != 1001 {
+		t.Fatalf("full security list result = %+v", result)
+	}
+}
+
+func TestRunLiveFullSecurityListPreservesPartialRowsOnError(t *testing.T) {
+	client := fakeLiveClient{
+		securityCount:          1001,
+		securityListErrAtStart: 1000,
+		securityPages: map[int][]model.Security{
+			0: makeSecurities(model.MarketSH, 0, 1000),
+		},
+	}
+	report := RunLive(context.Background(), client, LiveOptions{
+		Markets:          []model.Market{model.MarketSH},
+		Symbols:          []model.Symbol{{Market: model.MarketSH, Code: "600519"}},
+		FullSecurityList: true,
+		SkipBoards:       true,
+		SkipReportFiles:  true,
+	})
+
+	result, ok := findResult(report, "security_list_SH_full")
+	if !ok {
+		t.Fatalf("missing full security list result: %+v", report.Results)
+	}
+	if result.OK || result.Rows != 1000 {
+		t.Fatalf("partial full security list result = %+v", result)
+	}
+}
+
 type fakeLiveClient struct {
 	securityListErr            error
+	securityListErrAtStart     int
 	securityListWaitForContext bool
+	securityCount              uint16
+	securityPages              map[int][]model.Security
 }
 
 func (f fakeLiveClient) GetSecurityCount(context.Context, model.Market) (uint16, error) {
+	if f.securityCount > 0 {
+		return f.securityCount, nil
+	}
 	return 2, nil
 }
 
-func (f fakeLiveClient) GetSecurityList(ctx context.Context, _ model.Market, _ int) ([]model.Security, error) {
+func (f fakeLiveClient) GetSecurityList(ctx context.Context, _ model.Market, start int) ([]model.Security, error) {
 	if f.securityListWaitForContext {
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -82,9 +139,42 @@ func (f fakeLiveClient) GetSecurityList(ctx context.Context, _ model.Market, _ i
 	if f.securityListErr != nil {
 		return nil, f.securityListErr
 	}
+	if f.securityListErrAtStart > 0 && start == f.securityListErrAtStart {
+		return nil, errors.New("page timeout")
+	}
+	if f.securityPages != nil {
+		return f.securityPages[start], nil
+	}
 	return []model.Security{
 		{Market: model.MarketSH, Code: "600519", Name: "贵州茅台", DecimalPoint: 2, Raw: make([]byte, 29)},
 	}, nil
+}
+
+func makeSecurities(market model.Market, start int, count int) []model.Security {
+	items := make([]model.Security, count)
+	for i := range items {
+		items[i] = model.Security{
+			Market:       market,
+			Code:         makeCode(start + i),
+			Name:         "SEC",
+			DecimalPoint: 2,
+			Raw:          make([]byte, 29),
+		}
+	}
+	return items
+}
+
+func makeCode(i int) string {
+	return fmt.Sprintf("%06d", i)
+}
+
+func findResult(report Report, operation string) (CheckResult, bool) {
+	for _, result := range report.Results {
+		if result.Operation == operation {
+			return result, true
+		}
+	}
+	return CheckResult{}, false
 }
 
 func (fakeLiveClient) GetBars(context.Context, model.Market, string, model.KlineCategory, int, int) ([]model.Bar, error) {

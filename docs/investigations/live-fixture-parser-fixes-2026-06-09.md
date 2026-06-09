@@ -140,9 +140,11 @@ TDX_LIVE=1 go run ./cmd/tdx-validate \
 
 Result: 14 checks, 11 OK, 3 failures, 0 warnings. `boards_concept` returned 270 rows. `report_file_base_info.zip` returned 0 bytes on the public server used in this run.
 
+Full security-list validation is now available through `tdx-validate -full-security-list`. A SH-only live run with 35s operation timeout preserved 5000 partial rows before public-server write timeout against a count of 27215, so future work should focus on making full-list collection more resilient across hosts and longer request budgets.
+
 ## Remaining Work
 
 - Compare the captured fixtures with pytdx/xmtdx output.
 - Build a host-operation matrix for report files and history fund flow.
-- Add all-market pagination validation for complete SH/SZ/BJ universe coverage.
+- Improve `tdx-validate -full-security-list` completion under public-server timeouts and record SH/SZ/BJ baselines.
 - Add a durable benchmark report artifact after each parser/client change.

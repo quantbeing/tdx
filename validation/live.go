@@ -37,6 +37,7 @@ type LiveOptions struct {
 	ReportFiles          []string
 	SkipBoards           bool
 	SkipReportFiles      bool
+	FullSecurityList     bool
 }
 
 func DefaultLiveOptions() LiveOptions {
@@ -90,6 +91,23 @@ func RunLive(ctx context.Context, client LiveClient, opts LiveOptions) Report {
 			result.OK = false
 		}
 		report.Add(result)
+
+		if opts.FullSecurityList {
+			if count, ok := counts[market]; ok {
+				operation = fmt.Sprintf("security_list_%s_full", market.String())
+				expectedCount := int(count)
+				result := timedCheck(ctx, opts.PerOperationTimeout, operation, func(opCtx context.Context) CheckResult {
+					items, err := collectSecurityListPages(opCtx, client, market, expectedCount)
+					if err != nil {
+						result := ValidateSecurityUniverse(operation, market, expectedCount, items)
+						result.add(SeverityError, market, "", 0, "error", err.Error())
+						return result.finalize()
+					}
+					return ValidateSecurityUniverse(operation, market, expectedCount, items)
+				})
+				report.Add(result)
+			}
+		}
 	}
 
 	if len(opts.Symbols) > 0 {
@@ -227,6 +245,25 @@ func RunLive(ctx context.Context, client LiveClient, opts LiveOptions) Report {
 
 	report.Finish()
 	return report
+}
+
+func collectSecurityListPages(ctx context.Context, client LiveClient, market model.Market, expectedCount int) ([]model.Security, error) {
+	const pageSize = 1000
+	items := make([]model.Security, 0, expectedCount)
+	for start := 0; start < expectedCount; start += pageSize {
+		page, err := client.GetSecurityList(ctx, market, start)
+		if err != nil {
+			return items, err
+		}
+		if len(page) == 0 {
+			break
+		}
+		items = append(items, page...)
+		if len(page) < pageSize {
+			break
+		}
+	}
+	return items, nil
 }
 
 func normalizeLiveOptions(opts LiveOptions) LiveOptions {

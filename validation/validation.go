@@ -104,6 +104,23 @@ func ValidateSecurities(operation string, market model.Market, items []model.Sec
 	return result.finalize()
 }
 
+func ValidateSecurityUniverse(operation string, market model.Market, expectedCount int, items []model.Security) CheckResult {
+	result := ValidateSecurities(operation, market, items)
+	if len(items) != expectedCount {
+		result.add(SeverityError, market, "", 0, "rows", fmt.Sprintf("security list rows = %d, market count = %d", len(items), expectedCount))
+	}
+	seen := make(map[string]int, len(items))
+	for i, item := range items {
+		key := symbolKey(item.Market, item.Code)
+		if first, ok := seen[key]; ok {
+			result.add(SeverityError, item.Market, item.Code, i, "duplicate", fmt.Sprintf("duplicate security, first seen at index %d", first))
+			continue
+		}
+		seen[key] = i
+	}
+	return result.finalize()
+}
+
 func ValidateSecurityCount(operation string, market model.Market, count uint16) CheckResult {
 	result := CheckResult{Operation: operation, OK: true, Rows: int(count)}
 	if count == 0 {

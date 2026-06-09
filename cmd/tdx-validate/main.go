@@ -38,6 +38,7 @@ func run(args []string, stdout io.Writer, client validation.LiveClient, getenv f
 	var reportFilesRaw string
 	var skipBoards bool
 	var skipFiles bool
+	var fullSecurityList bool
 	var pretty bool
 
 	fs := flag.NewFlagSet("tdx-validate", flag.ContinueOnError)
@@ -57,6 +58,7 @@ func run(args []string, stdout io.Writer, client validation.LiveClient, getenv f
 	fs.StringVar(&reportFilesRaw, "report-files", "base_info.zip", "comma-separated report files")
 	fs.BoolVar(&skipBoards, "skip-boards", false, "skip board validation")
 	fs.BoolVar(&skipFiles, "skip-files", false, "skip report-file validation")
+	fs.BoolVar(&fullSecurityList, "full-security-list", false, "validate every security-list page for each selected market")
 	fs.BoolVar(&pretty, "pretty", false, "pretty-print JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -91,6 +93,7 @@ func run(args []string, stdout io.Writer, client validation.LiveClient, getenv f
 		ReportFiles:          splitCSV(reportFilesRaw),
 		SkipBoards:           skipBoards,
 		SkipReportFiles:      skipFiles,
+		FullSecurityList:     fullSecurityList,
 	}
 
 	ownedClient := false

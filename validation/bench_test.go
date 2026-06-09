@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/quantbeing/tdx/model"
@@ -14,6 +15,19 @@ func BenchmarkValidateSecurities(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		if result := ValidateSecurities("security_list", model.MarketSH, items); !result.OK {
+			b.Fatalf("result = %+v", result)
+		}
+	}
+}
+
+func BenchmarkValidateSecurityUniverse(b *testing.B) {
+	items := make([]model.Security, 5000)
+	for i := range items {
+		items[i] = model.Security{Market: model.MarketSH, Code: fmt.Sprintf("%06d", i), Name: "SEC", DecimalPoint: 2, Raw: make([]byte, 29)}
+	}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if result := ValidateSecurityUniverse("security_list_SH_full", model.MarketSH, len(items), items); !result.OK {
 			b.Fatalf("result = %+v", result)
 		}
 	}
