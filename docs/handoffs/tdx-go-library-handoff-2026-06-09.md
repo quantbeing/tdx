@@ -277,6 +277,8 @@ Latest live runs in this environment, on 2026-06-09 around 21:04-21:06 Asia/Shan
 - SH/SZ quote smoke, symbols `sh:600519,sz:000001`, day K-line, boards/report files skipped: 14 operation checks, 12 OK, 2 failed, 2 errors, 0 warnings, 52941 rows.
 - Boards/files smoke, SH symbol `600519`: 14 operation checks, 11 OK, 3 failed, 3 errors, 0 warnings, 28848 rows.
 - Full security-list SH smoke, SH symbol `600519`, full pagination enabled, boards/report files skipped: 13 operation checks, 12 OK, 1 failed, 2 errors, 10 warnings, 33589 rows. `security_list_SH_full` preserved 5000 partial rows before public-server timeout against a count of 27215.
+- After that baseline, full-list validation was changed to emit per-page operations such as `security_list_SH_page_0` and `security_list_SH_page_1000`, then emit the aggregate `security_list_SH_full`. This makes failed pages visible in the JSON report.
+- Latest page-level SH smoke with 8s page timeout showed `security_list_SH_page_0` through `security_list_SH_page_4000` OK, `security_list_SH_page_5000` timed out, and aggregate `security_list_SH_full` preserved 5000 rows.
 - Passed across these runs: SH/SZ count and first security-list pages, single-symbol quote, multi-market quote, day bars, minute-time structural check, transaction page when public server responded, market stat, finance, XDXR, company category, and `boards_concept` with 270 rows.
 - Failed due current public-server behavior: `fund_flow_SH_600519` and `history_fund_flow_SH_600519` intermittently hit transaction/history-transaction timeout; `report_file_base_info.zip` returned 0 bytes in the files smoke.
 - Prior minute-time negative-volume warnings are gone after parsing the live real-time symbol prefix. Prior multi-market quote bad second symbol is gone after fixing quote parser offset shadowing.
@@ -324,7 +326,7 @@ BenchmarkClientGetSecurityQuotesBatchSplit 15711 ns/op 192769 B/op     169 alloc
 Remaining validation work:
 
 - Compare the captured multi-symbol/multi-market quote and minute-time fixtures with pytdx/xmtdx JSON outputs.
-- Improve full-security-list live completion under public-server timeouts. The validator now preserves partial rows and count mismatch; latest SH baseline reached 5000/27215 rows before timeout.
+- Improve full-security-list live completion under public-server timeouts. The validator now preserves partial rows, per-page status, and count mismatch; latest SH page-level baseline reached 5000/27215 rows and identified `page_5000` as the timeout point.
 - Add a durable performance report artifact after each major parser/client change.
 - Extend report-file fallback and node matrix checks because public `base_info.zip` can return 0 bytes.
 - Keep fund-flow/history-fund-flow in live validation, but treat public-server transaction timeouts as environment-dependent until more host-operation fixtures are collected.

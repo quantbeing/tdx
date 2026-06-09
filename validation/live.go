@@ -96,15 +96,17 @@ func RunLive(ctx context.Context, client LiveClient, opts LiveOptions) Report {
 			if count, ok := counts[market]; ok {
 				operation = fmt.Sprintf("security_list_%s_full", market.String())
 				expectedCount := int(count)
-				result := timedCheck(ctx, opts.PerOperationTimeout, operation, func(opCtx context.Context) CheckResult {
-					items, err := collectSecurityListPages(opCtx, client, market, expectedCount)
-					if err != nil {
-						result := ValidateSecurityUniverse(operation, market, expectedCount, items)
-						result.add(SeverityError, market, "", 0, "error", err.Error())
-						return result.finalize()
-					}
-					return ValidateSecurityUniverse(operation, market, expectedCount, items)
-				})
+				started := time.Now()
+				items, pageResults, err := collectSecurityListPages(ctx, client, opts.PerOperationTimeout, market, expectedCount)
+				for _, pageResult := range pageResults {
+					report.Add(pageResult)
+				}
+				result := ValidateSecurityUniverse(operation, market, expectedCount, items)
+				if err != nil {
+					result.add(SeverityError, market, "", 0, "error", err.Error())
+					result = result.finalize()
+				}
+				result.LatencyMS = time.Since(started).Milliseconds()
 				report.Add(result)
 			}
 		}
@@ -247,23 +249,37 @@ func RunLive(ctx context.Context, client LiveClient, opts LiveOptions) Report {
 	return report
 }
 
-func collectSecurityListPages(ctx context.Context, client LiveClient, market model.Market, expectedCount int) ([]model.Security, error) {
+type securityListPage struct {
+	items []model.Security
+	err   error
+}
+
+func collectSecurityListPages(ctx context.Context, client LiveClient, timeout time.Duration, market model.Market, expectedCount int) ([]model.Security, []CheckResult, error) {
 	const pageSize = 1000
 	items := make([]model.Security, 0, expectedCount)
+	results := make([]CheckResult, 0, (expectedCount+pageSize-1)/pageSize)
 	for start := 0; start < expectedCount; start += pageSize {
-		page, err := client.GetSecurityList(ctx, market, start)
-		if err != nil {
-			return items, err
+		operation := fmt.Sprintf("security_list_%s_page_%d", market.String(), start)
+		result, page := timedValue(ctx, timeout, operation, func(opCtx context.Context) (CheckResult, securityListPage) {
+			page, err := client.GetSecurityList(opCtx, market, start)
+			if err != nil {
+				return errorResult(operation, market, "", err), securityListPage{err: err}
+			}
+			return ValidateSecurities(operation, market, page), securityListPage{items: page}
+		})
+		results = append(results, result)
+		if page.err != nil {
+			return items, results, page.err
 		}
-		if len(page) == 0 {
+		if len(page.items) == 0 {
 			break
 		}
-		items = append(items, page...)
-		if len(page) < pageSize {
+		items = append(items, page.items...)
+		if len(page.items) < pageSize {
 			break
 		}
 	}
-	return items, nil
+	return items, results, nil
 }
 
 func normalizeLiveOptions(opts LiveOptions) LiveOptions {

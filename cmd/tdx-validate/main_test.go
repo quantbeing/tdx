@@ -48,7 +48,7 @@ func TestRunCanEnableFullSecurityListValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if !strings.Contains(out.String(), `"security_list_SH_full"`) {
+	if !strings.Contains(out.String(), `"security_list_SH_full"`) || !strings.Contains(out.String(), `"security_list_SH_page_0"`) {
 		t.Fatalf("output = %s", out.String())
 	}
 }

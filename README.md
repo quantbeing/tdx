@@ -473,7 +473,7 @@ TDX_LIVE=1 go run ./cmd/tdx-validate \
 | `-symbols sh:600519,sz:000001` | 验证 quote/K 线/分时/逐笔/财务等使用的样本证券。 |
 | `-kline day,week,month` | 验证哪些 K 线周期。 |
 | `-full-kline` | 验证所有已知 K 线周期。 |
-| `-full-security-list` | 逐页拉取所选市场的完整证券列表，并校验总行数、重复 symbol、基础字段；建议配合更长 `-operation-timeout`。 |
+| `-full-security-list` | 逐页拉取所选市场的完整证券列表，输出 `security_list_<market>_page_<start>` 分页结果和 `security_list_<market>_full` 汇总结果；建议配合更长 `-operation-timeout`。 |
 | `-operation-timeout 8s` | 每个 operation 独立 timeout，避免一个慢接口拖垮整份报告。 |
 | `-connect-timeout 1s` | TCP connect/write timeout，建议小于 operation timeout 以测试 failover。 |
 | `-skip-boards` / `-skip-files` | 跳过板块和 report file 下载，适合先跑核心行情 smoke。 |
@@ -555,7 +555,7 @@ Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
 - `go test -count=1 ./...` 和 `go vet ./...` 均通过。
 - `TDX_LIVE=1 tdx-validate -markets sh -symbols sh:600519 -skip-boards -skip-files`：12 项检查，10 OK，2 个公网超时错误，0 warnings；核心 count/list/quote/day-bar/minute/transaction/finance/xdxr/company 均通过。
 - `TDX_LIVE=1 tdx-validate -markets sh,sz -symbols sh:600519,sz:000001 -skip-boards -skip-files`：14 项检查，12 OK，2 个公网超时错误，0 warnings；multi-market quote 返回 2 行并通过 symbol 完整性校验。
-- `tdx-validate -full-security-list` 已支持全市场分页完整性校验；默认 smoke 为了速度仍只查第 0 页。最新 SH live baseline 在 35s operation timeout 下拉到 5000/27215 行后公网写超时，报告会保留 partial rows 和错误。
+- `tdx-validate -full-security-list` 已支持全市场分页完整性校验；默认 smoke 为了速度仍只查第 0 页。最新 SH live baseline 在 35s operation timeout 下拉到 5000/27215 行后公网写超时，报告会保留 partial rows、失败页和错误。
 - `TDX_LIVE=1 tdx-validate` 含 boards/files：`boards_concept` 返回 270 行，`report_file_base_info.zip` 在当前公网节点返回 0 字节，仍需 fallback/节点矩阵继续反推。
 - 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `25.6 us/op`，minute parser 约 `5.7 us/op`，5000 行 universe validation 约 `228.6 us/op`，80 符号 quote 分片 client benchmark 约 `15.7 us/op`。完整输出记录在 handoff 文档。
 

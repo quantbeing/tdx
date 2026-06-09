@@ -89,6 +89,14 @@ func TestRunLiveCanValidateFullSecurityListPagination(t *testing.T) {
 	if !result.OK || result.Rows != 1001 {
 		t.Fatalf("full security list result = %+v", result)
 	}
+	page0, ok := findResult(report, "security_list_SH_page_0")
+	if !ok || !page0.OK || page0.Rows != 1000 {
+		t.Fatalf("page 0 result = %+v, ok=%v", page0, ok)
+	}
+	page1000, ok := findResult(report, "security_list_SH_page_1000")
+	if !ok || !page1000.OK || page1000.Rows != 1 {
+		t.Fatalf("page 1000 result = %+v, ok=%v", page1000, ok)
+	}
 }
 
 func TestRunLiveFullSecurityListPreservesPartialRowsOnError(t *testing.T) {
@@ -113,6 +121,10 @@ func TestRunLiveFullSecurityListPreservesPartialRowsOnError(t *testing.T) {
 	}
 	if result.OK || result.Rows != 1000 {
 		t.Fatalf("partial full security list result = %+v", result)
+	}
+	page1000, ok := findResult(report, "security_list_SH_page_1000")
+	if !ok || page1000.OK || page1000.Rows != 0 {
+		t.Fatalf("failed page result = %+v, ok=%v", page1000, ok)
 	}
 }
 
