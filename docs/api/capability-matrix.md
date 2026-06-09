@@ -24,3 +24,4 @@
 | Raw fixture capture | yes | `Client.Capture`, `tdx-probe -capture-dir`, and `tdx-fixture-matrix` preserve request/header/raw-body/decoded-body/parsed JSON. |
 | Python comparison CLI | yes | `tdx-compare-py` compares Go JSON or fixture `parsed_json` against pytdx/xmtdx reference JSON. |
 | CLI diagnostics | yes | `tdx-health`, `tdx-probe`, `tdx-fixture-matrix`, `tdx-dump-frame`, and `tdx-compare-py` are implemented; matrix output is JSONL and continues after per-operation failures. |
+| Fake TDX fault server | yes | `tdxtest.StartScript` simulates normal frames, raw bytes, bad zlib, partial frames, delayed responses, and disconnects. |

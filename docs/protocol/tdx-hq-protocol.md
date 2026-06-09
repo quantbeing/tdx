@@ -47,6 +47,8 @@ The Go client tracks host health both globally and per operation. Consecutive fa
 
 Every request attempt can emit an `Observer` event. The event carries operation, server, attempt number, latency, success/error, parsed row count, capture body size, and whether the connection was reused from the pool. `NewMetricsCollector` can be used directly or as a bridge into OpenTelemetry/logging in the upper application.
 
+Fault behavior is covered by a scriptable local fake server in `tdxtest`. It can replay setup frames and then emit malformed zlib payloads, partial frames, delayed responses, raw bytes, or disconnects, so failover and frame handling can be tested without relying on public server instability.
+
 For protocol reverse engineering, capture live responses with `tdx-probe -capture-dir` or `TDX_LIVE=1 tdx-fixture-matrix`, then compare the parsed result with pytdx/xmtdx JSON using `tdx-compare-py`. This keeps parser changes tied to concrete binary evidence. The matrix tool writes one JSONL status row per operation and continues after individual host/operation failures, which is useful for public-server instability.
 
 `GetMarketStat` and today `GetFundFlow` are canonical client helpers, not standalone verified HQ command payloads: market statistics are derived from SH `880005` quote fields, and today fund flow is calculated from L1 transaction pages using amount thresholds.

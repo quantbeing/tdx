@@ -30,6 +30,6 @@ Date: 2026-06-09
 
 ## Current Go v0 Status
 
-- Implemented: frame header/body, GBK, price varint, volume codec, datetime codec, setup bytes, per-host idle connection pool, security count, security list, stock bars, index bars, quote/snapshot, minute time, transactions, market-stat derivation, today fund-flow aggregation, history fund-flow category 22 parser/fallback, finance info, xdxr info, company info, block/report file fetch, request-level failover, operation-aware circuit breaker, server stats, observer hooks, metrics collector, heartbeat manager, raw fixture capture, live fixture matrix capture, and JSON comparison diagnostics.
+- Implemented: frame header/body, GBK, price varint, volume codec, datetime codec, setup bytes, per-host idle connection pool, security count, security list, stock bars, index bars, quote/snapshot, minute time, transactions, market-stat derivation, today fund-flow aggregation, history fund-flow category 22 parser/fallback, finance info, xdxr info, company info, block/report file fetch, request-level failover, operation-aware circuit breaker, server stats, observer hooks, metrics collector, heartbeat manager, fake fault server, raw fixture capture, live fixture matrix capture, and JSON comparison diagnostics.
 - Exposed but not fully decoded yet: richer extended-market commands.
 - The unsupported surfaces intentionally return typed errors so the public API can stabilize while protocol fixtures are added.

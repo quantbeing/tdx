@@ -12,6 +12,7 @@ This repository does not wrap gotdx. It implements the protocol directly with:
 - Operation-aware circuit breaker with per-operation cooldown and `OperationStats`.
 - Per-host idle connection pool; successful connections are reused and failed connections are discarded.
 - Request observer hooks and a built-in metrics collector for operation/host latency, failures, retries, and row counts.
+- Scriptable fake TDX server for timeout, slow response, partial frame, bad zlib, disconnect, and failover tests.
 - Heartbeat manager for long-lived transports.
 - Raw byte preservation for protocol auditing.
 
@@ -57,3 +58,20 @@ go run ./cmd/tdx-compare-py -go ./fixtures/live/<go.fixture.json> -py ./fixtures
 `tdx-probe -capture-dir` writes request bytes, the 16-byte response header, compressed/raw body bytes, decoded body bytes, and parsed JSON into a fixture file. `tdx-fixture-matrix` runs a live operation matrix and writes one JSONL summary row per operation; it requires `TDX_LIVE=1` unless `-allow-live` is set. `history-fund-flow` captures the category 22 direct response; `fund-flow` probes the transaction source used by client-side aggregation. `tdx-compare-py` compares either normal JSON files or Go fixture `parsed_json` output against pytdx/xmtdx reference JSON.
 
 Live tests are intentionally separate from unit tests. Capture binary fixtures before expanding parsers for fund flow and extended-market commands.
+
+## Fault Tests
+
+`tdxtest.StartScript` can simulate protocol and network failures without touching public servers:
+
+```go
+server, _ := tdxtest.StartScript(tdxtest.Script{
+    Connections: []tdxtest.ConnectionScript{{
+        Actions: []tdxtest.Action{
+            tdxtest.ReadAndRespond(nil),
+            tdxtest.ReadAndRespond(nil),
+            tdxtest.ReadAndRespond(nil),
+            tdxtest.ReadAndBadZlib([]byte{1, 2, 3}, 8),
+        },
+    }},
+})
+```

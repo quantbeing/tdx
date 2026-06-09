@@ -188,6 +188,82 @@ func TestClientDiscardsConnectionAfterRequestError(t *testing.T) {
 	}
 }
 
+func TestClientFailsOverAfterFakeServerBadZlib(t *testing.T) {
+	bad, err := tdxtest.StartScript(tdxtest.Script{
+		Connections: []tdxtest.ConnectionScript{
+			{Actions: append(tdxSetupActions(), tdxtest.ReadAndBadZlib([]byte{1, 2, 3}, 8))},
+		},
+	})
+	if err != nil {
+		t.Fatalf("start bad server: %v", err)
+	}
+	defer bad.Close()
+	good, err := tdxtest.StartScript(tdxtest.Script{
+		Connections: []tdxtest.ConnectionScript{
+			{Actions: append(tdxSetupActions(), tdxtest.ReadAndRespond([]byte{0xd2, 0x04}))},
+		},
+	})
+	if err != nil {
+		t.Fatalf("start good server: %v", err)
+	}
+	defer good.Close()
+
+	client := NewClient(Options{
+		Servers:     []model.Server{serverFromAddr(t, "bad", bad.Addr), serverFromAddr(t, "good", good.Addr)},
+		MaxAttempts: 2,
+		Pool:        PoolOptions{Disable: true},
+		Timeout:     time.Second,
+	})
+
+	count, err := client.GetSecurityCount(context.Background(), model.MarketSH)
+	if err != nil {
+		t.Fatalf("GetSecurityCount: %v", err)
+	}
+	if count != 1234 {
+		t.Fatalf("count = %d, want 1234", count)
+	}
+	stats := client.ServerStats()
+	if stats[0].Failures != 1 || stats[1].Successes != 1 {
+		t.Fatalf("stats = %+v", stats)
+	}
+}
+
+func TestClientFailsOverAfterFakeServerPartialFrame(t *testing.T) {
+	bad, err := tdxtest.StartScript(tdxtest.Script{
+		Connections: []tdxtest.ConnectionScript{
+			{Actions: append(tdxSetupActions(), tdxtest.ReadAndPartialFrame([]byte{0, 0}, 4))},
+		},
+	})
+	if err != nil {
+		t.Fatalf("start bad server: %v", err)
+	}
+	defer bad.Close()
+	good, err := tdxtest.StartScript(tdxtest.Script{
+		Connections: []tdxtest.ConnectionScript{
+			{Actions: append(tdxSetupActions(), tdxtest.ReadAndRespond([]byte{0x2a, 0x00}))},
+		},
+	})
+	if err != nil {
+		t.Fatalf("start good server: %v", err)
+	}
+	defer good.Close()
+
+	client := NewClient(Options{
+		Servers:     []model.Server{serverFromAddr(t, "bad", bad.Addr), serverFromAddr(t, "good", good.Addr)},
+		MaxAttempts: 2,
+		Pool:        PoolOptions{Disable: true},
+		Timeout:     time.Second,
+	})
+
+	count, err := client.GetSecurityCount(context.Background(), model.MarketSH)
+	if err != nil {
+		t.Fatalf("GetSecurityCount: %v", err)
+	}
+	if count != 42 {
+		t.Fatalf("count = %d, want 42", count)
+	}
+}
+
 func TestClientFailsOverByOperationAfterRequestError(t *testing.T) {
 	var calls int32
 	first := roundTripFunc(func(context.Context, command.Command) (any, error) {
@@ -511,4 +587,25 @@ func bytesOfLen(n int) []byte {
 		out[i] = byte(i)
 	}
 	return out
+}
+
+func tdxSetupActions() []tdxtest.Action {
+	return []tdxtest.Action{
+		tdxtest.ReadAndRespond(nil),
+		tdxtest.ReadAndRespond(nil),
+		tdxtest.ReadAndRespond(nil),
+	}
+}
+
+func serverFromAddr(t *testing.T, name string, addr string) model.Server {
+	t.Helper()
+	host, portRaw, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatalf("split addr: %v", err)
+	}
+	port, err := strconv.Atoi(portRaw)
+	if err != nil {
+		t.Fatalf("parse port: %v", err)
+	}
+	return model.Server{Name: name, Host: host, Port: port}
 }
