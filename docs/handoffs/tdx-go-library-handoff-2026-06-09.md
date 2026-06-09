@@ -279,6 +279,8 @@ Latest live runs in this environment, on 2026-06-09 around 21:04-21:06 Asia/Shan
 - Full security-list SH smoke, SH symbol `600519`, full pagination enabled, boards/report files skipped: 13 operation checks, 12 OK, 1 failed, 2 errors, 10 warnings, 33589 rows. `security_list_SH_full` preserved 5000 partial rows before public-server timeout against a count of 27215.
 - After that baseline, full-list validation was changed to emit per-page operations such as `security_list_SH_page_0` and `security_list_SH_page_1000`, then emit the aggregate `security_list_SH_full`. This makes failed pages visible in the JSON report.
 - Latest page-level SH smoke with 8s page timeout showed `security_list_SH_page_0` through `security_list_SH_page_4000` OK, `security_list_SH_page_5000` timed out, and aggregate `security_list_SH_full` preserved 5000 rows.
+- Full-list validation now also has `FullSecurityListPageRetries` / CLI `-security-list-page-retries`. This retries a failed page after the client-level host failover for that page has already failed; successful retries keep a warning finding with the earlier error.
+- Latest page-retry SH smoke with `-security-list-page-retries 1` completed `security_list_SH_full` with 27215 rows in 39266 ms. Pages 5000, 11000, 17000, and 23000 had first-attempt timeout warnings and then succeeded.
 - Passed across these runs: SH/SZ count and first security-list pages, single-symbol quote, multi-market quote, day bars, minute-time structural check, transaction page when public server responded, market stat, finance, XDXR, company category, and `boards_concept` with 270 rows.
 - Failed due current public-server behavior: `fund_flow_SH_600519` and `history_fund_flow_SH_600519` intermittently hit transaction/history-transaction timeout; `report_file_base_info.zip` returned 0 bytes in the files smoke.
 - Prior minute-time negative-volume warnings are gone after parsing the live real-time symbol prefix. Prior multi-market quote bad second symbol is gone after fixing quote parser offset shadowing.
@@ -304,29 +306,29 @@ go test -run=^$ -bench=. -benchmem ./codec ./frame ./command ./validation .
 Latest benchmark run on Apple M2 / darwin arm64:
 
 ```text
-BenchmarkGetPrice                         2.962 ns/op      0 B/op       0 allocs/op
-BenchmarkPutPrice                        16.77 ns/op       8 B/op       1 allocs/op
-BenchmarkGetVolume                       10.56 ns/op       0 B/op       0 allocs/op
-BenchmarkGetDateTimeMinute                2.793 ns/op      0 B/op       0 allocs/op
-BenchmarkGetDateTimeDay                   2.923 ns/op      0 B/op       0 allocs/op
-BenchmarkDecodeBodyRaw                    3.645 ns/op      0 B/op       0 allocs/op
-BenchmarkDecodeBodyZlib                3460 ns/op      42790 B/op      11 allocs/op
-BenchmarkParseSecurityList            168641 ns/op    434143 B/op    6002 allocs/op
-BenchmarkParseSecurityBars              47170 ns/op    166682 B/op     802 allocs/op
-BenchmarkParseIndexBars                 48266 ns/op    173082 B/op     802 allocs/op
-BenchmarkParseSecurityQuotes            25556 ns/op     57516 B/op     242 allocs/op
-BenchmarkParseMinuteTime                 5689 ns/op     20376 B/op     242 allocs/op
-BenchmarkParseTransactions              28778 ns/op     86553 B/op     802 allocs/op
-BenchmarkValidateSecurities              2077 ns/op         0 B/op       0 allocs/op
-BenchmarkValidateSecurityUniverse      228609 ns/op    298575 B/op    5020 allocs/op
-BenchmarkValidateQuotes                  9290 ns/op     11472 B/op     166 allocs/op
-BenchmarkClientGetSecurityQuotesBatchSplit 15711 ns/op 192769 B/op     169 allocs/op
+BenchmarkGetPrice                        10.50 ns/op       0 B/op       0 allocs/op
+BenchmarkPutPrice                        42.19 ns/op       8 B/op       1 allocs/op
+BenchmarkGetVolume                       13.09 ns/op       0 B/op       0 allocs/op
+BenchmarkGetDateTimeMinute                3.541 ns/op      0 B/op       0 allocs/op
+BenchmarkGetDateTimeDay                   3.782 ns/op      0 B/op       0 allocs/op
+BenchmarkDecodeBodyRaw                    4.190 ns/op      0 B/op       0 allocs/op
+BenchmarkDecodeBodyZlib                4270 ns/op      42791 B/op      11 allocs/op
+BenchmarkParseSecurityList            210068 ns/op    434146 B/op    6002 allocs/op
+BenchmarkParseSecurityBars              58932 ns/op    166682 B/op     802 allocs/op
+BenchmarkParseIndexBars                 53217 ns/op    173083 B/op     802 allocs/op
+BenchmarkParseSecurityQuotes            33975 ns/op     57517 B/op     242 allocs/op
+BenchmarkParseMinuteTime                 9131 ns/op     20376 B/op     242 allocs/op
+BenchmarkParseTransactions              35439 ns/op     86553 B/op     802 allocs/op
+BenchmarkValidateSecurities              2330 ns/op         0 B/op       0 allocs/op
+BenchmarkValidateSecurityUniverse      243997 ns/op    298575 B/op    5020 allocs/op
+BenchmarkValidateQuotes                 10246 ns/op     11472 B/op     166 allocs/op
+BenchmarkClientGetSecurityQuotesBatchSplit 15453 ns/op 192769 B/op     169 allocs/op
 ```
 
 Remaining validation work:
 
 - Compare the captured multi-symbol/multi-market quote and minute-time fixtures with pytdx/xmtdx JSON outputs.
-- Improve full-security-list live completion under public-server timeouts. The validator now preserves partial rows, per-page status, and count mismatch; latest SH page-level baseline reached 5000/27215 rows and identified `page_5000` as the timeout point.
+- Record SZ/BJ full-list baselines with `-security-list-page-retries 1`, and tune retries/timeouts for public-server instability.
 - Add a durable performance report artifact after each major parser/client change.
 - Extend report-file fallback and node matrix checks because public `base_info.zip` can return 0 bytes.
 - Keep fund-flow/history-fund-flow in live validation, but treat public-server transaction timeouts as environment-dependent until more host-operation fixtures are collected.

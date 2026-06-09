@@ -128,12 +128,58 @@ func TestRunLiveFullSecurityListPreservesPartialRowsOnError(t *testing.T) {
 	}
 }
 
+func TestRunLiveFullSecurityListRetriesFailedPage(t *testing.T) {
+	client := fakeLiveClient{
+		securityCount: 1001,
+		securityPages: map[int][]model.Security{
+			0:    makeSecurities(model.MarketSH, 0, 1000),
+			1000: makeSecurities(model.MarketSH, 1000, 1),
+		},
+		securityListFailuresBeforeSuccess: map[int]int{1000: 1},
+		securityListCalls:                 make(map[int]int),
+	}
+	report := RunLive(context.Background(), client, LiveOptions{
+		Markets:                     []model.Market{model.MarketSH},
+		Symbols:                     []model.Symbol{{Market: model.MarketSH, Code: "600519"}},
+		FullSecurityList:            true,
+		FullSecurityListPageRetries: 1,
+		SkipBoards:                  true,
+		SkipReportFiles:             true,
+	})
+
+	result, ok := findResult(report, "security_list_SH_full")
+	if !ok {
+		t.Fatalf("missing full security list result: %+v", report.Results)
+	}
+	if !result.OK || result.Rows != 1001 {
+		t.Fatalf("full security list result = %+v", result)
+	}
+	page1000, ok := findResult(report, "security_list_SH_page_1000")
+	if !ok || !page1000.OK || page1000.Rows != 1 {
+		t.Fatalf("retried page result = %+v, ok=%v", page1000, ok)
+	}
+	if client.securityListCalls[1000] != 2 {
+		t.Fatalf("page 1000 calls = %d, want 2", client.securityListCalls[1000])
+	}
+	var sawRetryWarning bool
+	for _, finding := range page1000.Findings {
+		if finding.Severity == SeverityWarning && finding.Field == "retry" {
+			sawRetryWarning = true
+		}
+	}
+	if !sawRetryWarning {
+		t.Fatalf("page findings = %+v, want retry warning", page1000.Findings)
+	}
+}
+
 type fakeLiveClient struct {
-	securityListErr            error
-	securityListErrAtStart     int
-	securityListWaitForContext bool
-	securityCount              uint16
-	securityPages              map[int][]model.Security
+	securityListErr                   error
+	securityListErrAtStart            int
+	securityListWaitForContext        bool
+	securityCount                     uint16
+	securityPages                     map[int][]model.Security
+	securityListFailuresBeforeSuccess map[int]int
+	securityListCalls                 map[int]int
 }
 
 func (f fakeLiveClient) GetSecurityCount(context.Context, model.Market) (uint16, error) {
@@ -153,6 +199,12 @@ func (f fakeLiveClient) GetSecurityList(ctx context.Context, _ model.Market, sta
 	}
 	if f.securityListErrAtStart > 0 && start == f.securityListErrAtStart {
 		return nil, errors.New("page timeout")
+	}
+	if f.securityListCalls != nil {
+		f.securityListCalls[start]++
+	}
+	if failures := f.securityListFailuresBeforeSuccess[start]; failures > 0 && f.securityListCalls[start] <= failures {
+		return nil, errors.New("retryable page timeout")
 	}
 	if f.securityPages != nil {
 		return f.securityPages[start], nil

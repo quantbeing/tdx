@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +55,29 @@ func TestRunCanEnableFullSecurityListValidation(t *testing.T) {
 	}
 }
 
+func TestRunPassesSecurityListPageRetries(t *testing.T) {
+	var out bytes.Buffer
+	client := fakeValidateRetryClient{calls: make(map[int]int)}
+	err := run([]string{
+		"-markets", "sh",
+		"-symbols", "sh:600519",
+		"-skip-boards",
+		"-skip-files",
+		"-full-security-list",
+		"-security-list-page-retries", "1",
+	}, &out, client, func(string) string { return "1" })
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	text := out.String()
+	if !strings.Contains(text, `"security_list_SH_full"`) || !strings.Contains(text, `"field":"retry"`) {
+		t.Fatalf("output = %s", text)
+	}
+	if client.calls[1000] != 2 {
+		t.Fatalf("page 1000 calls = %d, want 2", client.calls[1000])
+	}
+}
+
 func TestParseSymbolsRejectsBadToken(t *testing.T) {
 	_, err := parseSymbols("sh600519")
 	if err == nil || !strings.Contains(err.Error(), "market:code") {
@@ -72,12 +97,37 @@ func TestBuildClientOptionsUsesShortTransportTimeouts(t *testing.T) {
 
 type fakeValidateClient struct{}
 
+type fakeValidateRetryClient struct {
+	fakeValidateClient
+	calls map[int]int
+}
+
 func (fakeValidateClient) GetSecurityCount(context.Context, model.Market) (uint16, error) {
 	return 1, nil
 }
 
 func (fakeValidateClient) GetSecurityList(context.Context, model.Market, int) ([]model.Security, error) {
 	return []model.Security{{Market: model.MarketSH, Code: "600519", Name: "贵州茅台", DecimalPoint: 2, Raw: make([]byte, 29)}}, nil
+}
+
+func (fakeValidateRetryClient) GetSecurityCount(context.Context, model.Market) (uint16, error) {
+	return 1001, nil
+}
+
+func (f fakeValidateRetryClient) GetSecurityList(_ context.Context, market model.Market, start int) ([]model.Security, error) {
+	f.calls[start]++
+	if start == 1000 && f.calls[start] == 1 {
+		return nil, errors.New("page timeout")
+	}
+	count := 1000
+	if start == 1000 {
+		count = 1
+	}
+	items := make([]model.Security, count)
+	for i := range items {
+		items[i] = model.Security{Market: market, Code: fmt.Sprintf("%06d", start+i), Name: "SEC", DecimalPoint: 2, Raw: make([]byte, 29)}
+	}
+	return items, nil
 }
 
 func (fakeValidateClient) GetBars(context.Context, model.Market, string, model.KlineCategory, int, int) ([]model.Bar, error) {

@@ -140,11 +140,11 @@ TDX_LIVE=1 go run ./cmd/tdx-validate \
 
 Result: 14 checks, 11 OK, 3 failures, 0 warnings. `boards_concept` returned 270 rows. `report_file_base_info.zip` returned 0 bytes on the public server used in this run.
 
-Full security-list validation is now available through `tdx-validate -full-security-list`. A SH-only live run with 35s operation timeout preserved 5000 partial rows before public-server write timeout against a count of 27215. The validator now emits per-page operations before the aggregate full-list result; a follow-up SH smoke showed `security_list_SH_page_0` through `security_list_SH_page_4000` OK and `security_list_SH_page_5000` timing out.
+Full security-list validation is now available through `tdx-validate -full-security-list`. A SH-only live run with 35s operation timeout preserved 5000 partial rows before public-server write timeout against a count of 27215. The validator now emits per-page operations before the aggregate full-list result; a follow-up SH smoke showed `security_list_SH_page_0` through `security_list_SH_page_4000` OK and `security_list_SH_page_5000` timing out. Page-level retry is available through `-security-list-page-retries`, and successful retries preserve warning findings for earlier failed attempts. With `-security-list-page-retries 1`, the SH full-list smoke completed 27215 rows; pages 5000, 11000, 17000, and 23000 retried successfully after first-attempt timeouts.
 
 ## Remaining Work
 
 - Compare the captured fixtures with pytdx/xmtdx output.
 - Build a host-operation matrix for report files and history fund flow.
-- Improve `tdx-validate -full-security-list` completion under public-server timeouts and record SH/SZ/BJ per-page baselines.
+- Record SZ/BJ `tdx-validate -full-security-list -security-list-page-retries 1` per-page baselines.
 - Add a durable benchmark report artifact after each parser/client change.

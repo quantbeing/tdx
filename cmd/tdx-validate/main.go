@@ -39,6 +39,7 @@ func run(args []string, stdout io.Writer, client validation.LiveClient, getenv f
 	var skipBoards bool
 	var skipFiles bool
 	var fullSecurityList bool
+	var securityListPageRetries int
 	var pretty bool
 
 	fs := flag.NewFlagSet("tdx-validate", flag.ContinueOnError)
@@ -59,6 +60,7 @@ func run(args []string, stdout io.Writer, client validation.LiveClient, getenv f
 	fs.BoolVar(&skipBoards, "skip-boards", false, "skip board validation")
 	fs.BoolVar(&skipFiles, "skip-files", false, "skip report-file validation")
 	fs.BoolVar(&fullSecurityList, "full-security-list", false, "validate every security-list page for each selected market")
+	fs.IntVar(&securityListPageRetries, "security-list-page-retries", 0, "retry each full security-list page this many times after a page error")
 	fs.BoolVar(&pretty, "pretty", false, "pretty-print JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -82,18 +84,19 @@ func run(args []string, stdout io.Writer, client validation.LiveClient, getenv f
 		categories = allKlineCategories()
 	}
 	opts := validation.LiveOptions{
-		Markets:              markets,
-		Symbols:              symbols,
-		KlineCategories:      categories,
-		BarCount:             barCount,
-		TransactionCount:     transactionCount,
-		HistoryFundFlowCount: historyFundFlowCount,
-		PerOperationTimeout:  operationTimeout,
-		BoardTypes:           splitCSV(boardTypesRaw),
-		ReportFiles:          splitCSV(reportFilesRaw),
-		SkipBoards:           skipBoards,
-		SkipReportFiles:      skipFiles,
-		FullSecurityList:     fullSecurityList,
+		Markets:                     markets,
+		Symbols:                     symbols,
+		KlineCategories:             categories,
+		BarCount:                    barCount,
+		TransactionCount:            transactionCount,
+		HistoryFundFlowCount:        historyFundFlowCount,
+		PerOperationTimeout:         operationTimeout,
+		BoardTypes:                  splitCSV(boardTypesRaw),
+		ReportFiles:                 splitCSV(reportFilesRaw),
+		SkipBoards:                  skipBoards,
+		SkipReportFiles:             skipFiles,
+		FullSecurityList:            fullSecurityList,
+		FullSecurityListPageRetries: securityListPageRetries,
 	}
 
 	ownedClient := false

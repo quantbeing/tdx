@@ -26,18 +26,19 @@ type LiveClient interface {
 }
 
 type LiveOptions struct {
-	Markets              []model.Market
-	Symbols              []model.Symbol
-	KlineCategories      []model.KlineCategory
-	BarCount             int
-	TransactionCount     int
-	HistoryFundFlowCount int
-	PerOperationTimeout  time.Duration
-	BoardTypes           []string
-	ReportFiles          []string
-	SkipBoards           bool
-	SkipReportFiles      bool
-	FullSecurityList     bool
+	Markets                     []model.Market
+	Symbols                     []model.Symbol
+	KlineCategories             []model.KlineCategory
+	BarCount                    int
+	TransactionCount            int
+	HistoryFundFlowCount        int
+	PerOperationTimeout         time.Duration
+	BoardTypes                  []string
+	ReportFiles                 []string
+	SkipBoards                  bool
+	SkipReportFiles             bool
+	FullSecurityList            bool
+	FullSecurityListPageRetries int
 }
 
 func DefaultLiveOptions() LiveOptions {
@@ -97,7 +98,7 @@ func RunLive(ctx context.Context, client LiveClient, opts LiveOptions) Report {
 				operation = fmt.Sprintf("security_list_%s_full", market.String())
 				expectedCount := int(count)
 				started := time.Now()
-				items, pageResults, err := collectSecurityListPages(ctx, client, opts.PerOperationTimeout, market, expectedCount)
+				items, pageResults, err := collectSecurityListPages(ctx, client, opts.PerOperationTimeout, market, expectedCount, opts.FullSecurityListPageRetries)
 				for _, pageResult := range pageResults {
 					report.Add(pageResult)
 				}
@@ -254,19 +255,15 @@ type securityListPage struct {
 	err   error
 }
 
-func collectSecurityListPages(ctx context.Context, client LiveClient, timeout time.Duration, market model.Market, expectedCount int) ([]model.Security, []CheckResult, error) {
+func collectSecurityListPages(ctx context.Context, client LiveClient, timeout time.Duration, market model.Market, expectedCount int, pageRetries int) ([]model.Security, []CheckResult, error) {
 	const pageSize = 1000
+	if pageRetries < 0 {
+		pageRetries = 0
+	}
 	items := make([]model.Security, 0, expectedCount)
 	results := make([]CheckResult, 0, (expectedCount+pageSize-1)/pageSize)
 	for start := 0; start < expectedCount; start += pageSize {
-		operation := fmt.Sprintf("security_list_%s_page_%d", market.String(), start)
-		result, page := timedValue(ctx, timeout, operation, func(opCtx context.Context) (CheckResult, securityListPage) {
-			page, err := client.GetSecurityList(opCtx, market, start)
-			if err != nil {
-				return errorResult(operation, market, "", err), securityListPage{err: err}
-			}
-			return ValidateSecurities(operation, market, page), securityListPage{items: page}
-		})
+		result, page := collectSecurityListPage(ctx, client, timeout, market, start, pageRetries)
 		results = append(results, result)
 		if page.err != nil {
 			return items, results, page.err
@@ -280,6 +277,43 @@ func collectSecurityListPages(ctx context.Context, client LiveClient, timeout ti
 		}
 	}
 	return items, results, nil
+}
+
+func collectSecurityListPage(ctx context.Context, client LiveClient, timeout time.Duration, market model.Market, start int, retries int) (CheckResult, securityListPage) {
+	operation := fmt.Sprintf("security_list_%s_page_%d", market.String(), start)
+	started := time.Now()
+	var retryFindings []Finding
+	var lastErr error
+	for attempt := 0; attempt <= retries; attempt++ {
+		opCtx, cancel := context.WithTimeout(ctx, timeout)
+		page, err := client.GetSecurityList(opCtx, market, start)
+		cancel()
+		if err != nil {
+			lastErr = err
+			if attempt < retries {
+				retryFindings = append(retryFindings, Finding{
+					Severity:  SeverityWarning,
+					Operation: operation,
+					Market:    market,
+					Field:     "retry",
+					Message:   fmt.Sprintf("attempt %d failed: %s", attempt+1, err.Error()),
+				})
+				continue
+			}
+			result := errorResult(operation, market, "", err)
+			result.Findings = append(retryFindings, result.Findings...)
+			result.LatencyMS = time.Since(started).Milliseconds()
+			return result, securityListPage{err: err}
+		}
+		result := ValidateSecurities(operation, market, page)
+		result.Findings = append(retryFindings, result.Findings...)
+		result = result.finalize()
+		result.LatencyMS = time.Since(started).Milliseconds()
+		return result, securityListPage{items: page}
+	}
+	result := errorResult(operation, market, "", lastErr)
+	result.LatencyMS = time.Since(started).Milliseconds()
+	return result, securityListPage{err: lastErr}
 }
 
 func normalizeLiveOptions(opts LiveOptions) LiveOptions {
