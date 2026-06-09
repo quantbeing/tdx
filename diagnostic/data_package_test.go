@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -268,7 +269,7 @@ func TestFetchDataPackageFixed13RecordsRejectsHTMLChallenge(t *testing.T) {
 }
 
 func TestSummarizeDataPackageFixed13RecordsLimitsRows(t *testing.T) {
-	data, err := hex.DecodeString("01bf7b330100008841000000000176a033010000104200000000")
+	data, err := hex.DecodeString("01bf7b330100008841000000000176a033010000104200000001")
 	if err != nil {
 		t.Fatalf("DecodeString: %v", err)
 	}
@@ -280,6 +281,34 @@ func TestSummarizeDataPackageFixed13RecordsLimitsRows(t *testing.T) {
 	summary := SummarizeDataPackageFixed13Records(records, 1)
 	if summary.RecordCount != 2 || len(summary.Records) != 1 || summary.RecordsTruncated != 1 {
 		t.Fatalf("summary = %+v", summary)
+	}
+	if summary.DateLikeMin != 20151231 || summary.DateLikeMax != 20160630 {
+		t.Fatalf("date range = %d/%d", summary.DateLikeMin, summary.DateLikeMax)
+	}
+	if summary.Field1Float32Min != 17 || summary.Field1Float32Max != 36 {
+		t.Fatalf("field1 range = %v/%v", summary.Field1Float32Min, summary.Field1Float32Max)
+	}
+	if summary.Field2NonzeroCount != 1 {
+		t.Fatalf("Field2NonzeroCount = %d", summary.Field2NonzeroCount)
+	}
+	if summary.MarkerCounts["1"] != 2 {
+		t.Fatalf("MarkerCounts = %+v", summary.MarkerCounts)
+	}
+}
+
+func TestDataPackageFixed13SummaryMarshalPreservesZeroStats(t *testing.T) {
+	records, err := ParseDataPackageFixed13Records("fixture", make([]byte, 13))
+	if err != nil {
+		t.Fatalf("ParseDataPackageFixed13Records: %v", err)
+	}
+	summary := SummarizeDataPackageFixed13Records(records, 0)
+
+	data, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(data), `"date_like_min":0`) {
+		t.Fatalf("json = %s", data)
 	}
 }
 

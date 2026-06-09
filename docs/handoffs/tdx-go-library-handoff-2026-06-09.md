@@ -287,6 +287,7 @@ Latest live runs in this environment, on 2026-06-09 around 21:04-21:06 Asia/Shan
 - Data-package integrity caveat: manifest/local-index/HTTP file MD5 and size semantics are not direct strong checks in sampled live data. For example, some same-name files had different manifest and `.local` MD5 values, and one sampled `.dat` content length differed from manifest size by 13 bytes.
 - Go standard HTTP direct fetch for sampled `.dat` returned a `text/html` JavaScript challenge in this environment. `tdx-data-probe` now rejects HTML/challenge bodies; use curl plus `tdx-data-probe -kind dat13 -input /tmp/file.dat` for binary samples.
 - `gpbj920021.dat` downloaded by curl was 141154 bytes and parsed into 10858 fixed 13-byte records with no trailing bytes. First date-like values were `20151231`, `20160630`, `20161231`, `20170630`; first float32-like values were `17`, `36`, `55`, `181`.
+- The `dat13` summary now includes marker counts, date-like min/max, float32-like min/max, and non-zero field2 count. For `gpbj920021.dat`, min/max date-like was `0/20260609`, field1 range was about `-1820.42/502124.97`, and field2 was non-zero in `3048` rows. Marker distribution is mixed, so the next parser step should group by marker.
 - Passed across these runs: SH/SZ count and first security-list pages, single-symbol quote, multi-market quote, day bars, minute-time structural check, transaction page when public server responded, market stat, finance, XDXR, company category, and `boards_concept` with 270 rows.
 - Failed due current public-server behavior: `fund_flow_SH_600519` and `history_fund_flow_SH_600519` intermittently hit transaction/history-transaction timeout; `report_file_base_info.zip` returned 0 bytes in the files smoke.
 - Prior minute-time negative-volume warnings are gone after parsing the live real-time symbol prefix. Prior multi-market quote bad second symbol is gone after fixing quote parser offset shadowing.
@@ -334,16 +335,16 @@ BenchmarkClientGetSecurityQuotesBatchSplit 15453 ns/op 192769 B/op     169 alloc
 Additional 2026-06-10 data-package parser benchmark:
 
 ```text
-BenchmarkParseDataPackageManifest-8          1755110 ns/op  2120531 B/op  14529 allocs/op
-BenchmarkParseDataPackageLocalIndex-8        1236372 ns/op  1969510 B/op  14516 allocs/op
-BenchmarkParseDataPackageFixed13Records-8     390854 ns/op  1043815 B/op  10859 allocs/op
+BenchmarkParseDataPackageManifest-8          1707342 ns/op  2120914 B/op  14532 allocs/op
+BenchmarkParseDataPackageLocalIndex-8        1192943 ns/op  1969465 B/op  14515 allocs/op
+BenchmarkParseDataPackageFixed13Records-8     342552 ns/op  1043824 B/op  10859 allocs/op
 ```
 
 Remaining validation work:
 
 - Compare the captured multi-symbol/multi-market quote and minute-time fixtures with pytdx/xmtdx JSON outputs.
 - Implement BJ fallback collection from official `gpbj*.dat` data-package candidates and protocol-accessible files such as `base_info.zip` or related report/security files, then validate against `security_count_BJ=345`.
-- Continue parsing sampled `gpbj*.dat` payloads with fixture-backed tests; fixed 13-byte records are confirmed for `gpbj920021.dat`, but field meanings and whether names/security metadata are present are unknown.
+- Continue parsing sampled `gpbj*.dat` payloads with fixture-backed tests; fixed 13-byte records are confirmed for `gpbj920021.dat`, but field meanings and whether names/security metadata are present are unknown. Start by grouping records by `marker`.
 - Add a durable performance report artifact after each major parser/client change.
 - Extend report-file fallback and node matrix checks because public `base_info.zip` can return 0 bytes.
 - Keep fund-flow/history-fund-flow in live validation, but treat public-server transaction timeouts as environment-dependent until more host-operation fixtures are collected.
@@ -421,7 +422,7 @@ Suggested route:
 
 1. Use `go run ./cmd/tdx-data-probe -prefix gpbj -limit 8` and `go run ./cmd/tdx-data-probe -kind local-index -prefix gpbj -limit 8` to confirm current official data-package candidates.
 2. Capture small `gpbj*.dat` samples with curl, then inspect them with `go run ./cmd/tdx-data-probe -kind dat13 -input /tmp/file.dat -limit 20`; do not trust Go standard HTTP direct `.dat` fetch unless challenge detection passes.
-3. Decode the `.dat` field semantics with tests; do not enforce manifest/local-index MD5 until checksum semantics are known.
+3. Decode the `.dat` field semantics with tests, starting by grouping fixed13 records by `marker`; do not enforce manifest/local-index MD5 until checksum semantics are known.
 4. Fetch `base_info.zip` or other securities/report files through `GetReportFile` and compare with data-package candidates.
 5. Extract securities into `model.Security` or a dedicated fallback model.
 6. Merge with direct `security_list` partial result.

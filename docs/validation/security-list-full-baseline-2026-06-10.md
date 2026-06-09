@@ -165,6 +165,10 @@ Result:
 - Record size: `13`
 - Record count: `10858`
 - Trailing bytes: `0`
+- Marker distribution is mixed, not a single homogeneous row type. Frequent markers include `27` (`1483` rows), `16` (`1422`), `38` (`1066`), `25` (`1063`), and `3/11/12/13` (`804` each).
+- Date-like range in raw summary: min `0`, max `20260609`.
+- Float32-like field range: min about `-1820.42`, max about `502124.97`.
+- `field2_uint32` is non-zero in `3048` rows.
 - First records preserve raw hex plus fields named only by observed shape:
   - `20151231`, `field1_float32=17`
   - `20160630`, `field1_float32=36`
@@ -175,12 +179,12 @@ Interpretation:
 
 - Official HTTP data packages give a validated BJ candidate-file fallback surface even when HQ `security_list_BJ_page_0` times out.
 - They currently enumerate `319` `gpbj*.dat` candidates, while HQ `security_count_BJ` reports `345`; this is useful but not a complete BJ securities list.
-- The sampled `.dat` payload is confirmed to be 13-byte record-oriented, but field semantics are still unknown and it does not yet provide names, status, or canonical security metadata.
+- The sampled `.dat` payload is confirmed to be 13-byte record-oriented, but marker distribution shows multiple row classes. Field semantics are still unknown and it does not yet provide names, status, or canonical security metadata.
 
 ## Next Work
 
 - Add BJ fallback collection from official data package candidates and protocol-accessible files such as `base_info.zip` or related report/security files.
-- Continue parsing sampled `gpbj*.dat` fixtures with tests; determine field semantics and whether names/security metadata are present elsewhere.
+- Continue parsing sampled `gpbj*.dat` fixtures with tests; group by `marker`, determine field semantics, and check whether names/security metadata are present elsewhere.
 - Investigate official data package checksum/update semantics before enforcing MD5 or size.
 - Build a host-operation matrix specifically for `security_list_BJ_page_0`.
 - Consider exposing full-list retry budgets separately from general operation timeout if longer BJ probing is needed.

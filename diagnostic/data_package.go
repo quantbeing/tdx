@@ -101,13 +101,19 @@ type DataPackageLocalIndexSummary struct {
 }
 
 type DataPackageFixed13Summary struct {
-	Source           string                     `json:"source,omitempty"`
-	RecordSize       int                        `json:"record_size"`
-	RecordCount      int                        `json:"record_count"`
-	TrailingBytes    int                        `json:"trailing_bytes"`
-	TrailingBytesHex string                     `json:"trailing_bytes_hex,omitempty"`
-	RecordsTruncated int                        `json:"records_truncated"`
-	Records          []DataPackageFixed13Record `json:"records,omitempty"`
+	Source             string                     `json:"source,omitempty"`
+	RecordSize         int                        `json:"record_size"`
+	RecordCount        int                        `json:"record_count"`
+	TrailingBytes      int                        `json:"trailing_bytes"`
+	TrailingBytesHex   string                     `json:"trailing_bytes_hex,omitempty"`
+	MarkerCounts       map[string]int             `json:"marker_counts,omitempty"`
+	DateLikeMin        int                        `json:"date_like_min"`
+	DateLikeMax        int                        `json:"date_like_max"`
+	Field1Float32Min   float64                    `json:"field1_float32_min"`
+	Field1Float32Max   float64                    `json:"field1_float32_max"`
+	Field2NonzeroCount int                        `json:"field2_nonzero_count"`
+	RecordsTruncated   int                        `json:"records_truncated"`
+	Records            []DataPackageFixed13Record `json:"records,omitempty"`
 }
 
 func FetchDataPackageManifest(ctx context.Context, url string, client *http.Client) (DataPackageManifest, error) {
@@ -217,14 +223,21 @@ func SummarizeDataPackageFixed13Records(records DataPackageFixed13Records, limit
 	if limit > 0 {
 		rows = append(rows, records.Records[:limit]...)
 	}
+	stats := summarizeFixed13Stats(records.Records)
 	return DataPackageFixed13Summary{
-		Source:           records.Source,
-		RecordSize:       records.RecordSize,
-		RecordCount:      len(records.Records),
-		TrailingBytes:    records.TrailingBytes,
-		TrailingBytesHex: records.TrailingBytesHex,
-		RecordsTruncated: len(records.Records) - len(rows),
-		Records:          rows,
+		Source:             records.Source,
+		RecordSize:         records.RecordSize,
+		RecordCount:        len(records.Records),
+		TrailingBytes:      records.TrailingBytes,
+		TrailingBytesHex:   records.TrailingBytesHex,
+		MarkerCounts:       stats.markerCounts,
+		DateLikeMin:        stats.dateLikeMin,
+		DateLikeMax:        stats.dateLikeMax,
+		Field1Float32Min:   stats.field1Min,
+		Field1Float32Max:   stats.field1Max,
+		Field2NonzeroCount: stats.field2NonzeroCount,
+		RecordsTruncated:   len(records.Records) - len(rows),
+		Records:            rows,
 	}
 }
 
@@ -291,6 +304,51 @@ func ParseDataPackageFixed13Records(source string, data []byte) (DataPackageFixe
 		out.TrailingBytesHex = hex.EncodeToString(trailing)
 	}
 	return out, nil
+}
+
+type fixed13Stats struct {
+	markerCounts       map[string]int
+	dateLikeMin        int
+	dateLikeMax        int
+	field1Min          float64
+	field1Max          float64
+	field1Seen         bool
+	field2NonzeroCount int
+}
+
+func summarizeFixed13Stats(records []DataPackageFixed13Record) fixed13Stats {
+	stats := fixed13Stats{markerCounts: make(map[string]int)}
+	if len(records) == 0 {
+		return stats
+	}
+	stats.dateLikeMin = records[0].DateLike
+	stats.dateLikeMax = records[0].DateLike
+	for _, record := range records {
+		stats.markerCounts[strconv.Itoa(int(record.Marker))]++
+		if record.DateLike < stats.dateLikeMin {
+			stats.dateLikeMin = record.DateLike
+		}
+		if record.DateLike > stats.dateLikeMax {
+			stats.dateLikeMax = record.DateLike
+		}
+		if record.Field1Float32Valid {
+			if !stats.field1Seen {
+				stats.field1Min = record.Field1Float32
+				stats.field1Max = record.Field1Float32
+				stats.field1Seen = true
+			}
+			if record.Field1Float32 < stats.field1Min {
+				stats.field1Min = record.Field1Float32
+			}
+			if record.Field1Float32 > stats.field1Max {
+				stats.field1Max = record.Field1Float32
+			}
+		}
+		if record.Field2Uint32 != 0 {
+			stats.field2NonzeroCount++
+		}
+	}
+	return stats
 }
 
 func (m DataPackageManifest) FindEntry(fileName string) (DataPackageEntry, bool) {
