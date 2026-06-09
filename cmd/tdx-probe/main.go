@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -17,10 +18,22 @@ import (
 func main() {
 	var op string
 	var market string
+	var code string
+	var symbols string
+	var date int
+	var start int
+	var count int
+	var file string
 	var timeout time.Duration
 	var captureDir string
-	flag.StringVar(&op, "op", "security-count", "operation: security-count, security-list, stock-bars, index-bars, quote, market-stat, minute, transaction, fund-flow, history-fund-flow, finance, xdxr, company, block-meta, block, report")
+	flag.StringVar(&op, "op", "security-count", "operation: security-count, security-list, stock-bars, index-bars, quote, market-stat, minute, history-minute, transaction, history-transaction, fund-flow, history-fund-flow, finance, xdxr, company, block-meta, block, report")
 	flag.StringVar(&market, "market", "sh", "market: sh, sz, bj")
+	flag.StringVar(&code, "code", "", "security code for symbol operations")
+	flag.StringVar(&symbols, "symbols", "", "comma-separated quote symbols as market:code, for example sh:600519,sz:000001")
+	flag.IntVar(&date, "date", 0, "date for history operations, YYYYMMDD")
+	flag.IntVar(&start, "start", 0, "start offset for paged operations")
+	flag.IntVar(&count, "count", 0, "row count for paged operations")
+	flag.StringVar(&file, "file", "", "filename for block/report operations")
 	flag.DurationVar(&timeout, "timeout", 8*time.Second, "timeout")
 	flag.StringVar(&captureDir, "capture-dir", "", "write raw response fixture JSON to this directory")
 	flag.Parse()
@@ -29,7 +42,18 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := commandFor(op, parseMarket(market))
+	cmd, err := commandForOptions(probeOptions{
+		Op: op, Market: market, Code: code, Symbols: symbols,
+		Date: date, Start: start, Count: count, File: file,
+	})
+	if err != nil {
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
+			"operation": op,
+			"ok":        false,
+			"error":     err.Error(),
+		})
+		os.Exit(2)
+	}
 	if captureDir != "" {
 		capture, err := client.Capture(ctx, cmd)
 		if err != nil {
@@ -60,41 +84,96 @@ func writeCaptureFixture(dir string, capture tdx.CapturedResponse) (diagnostic.F
 	return diagnostic.WriteFixture(diagnostic.DefaultFixturePath(dir, capture), capture)
 }
 
-func commandFor(op string, market model.Market) command.Command {
-	switch strings.ToLower(op) {
-	case "security-list":
-		return command.NewSecurityListCommand(market, 0)
-	case "stock-bars":
-		return command.NewSecurityBarsCommand(model.MarketSH, "600519", model.KlineDay, 0, 10)
-	case "index-bars":
-		return command.NewIndexBarsCommand(model.MarketSH, "000001", model.KlineDay, 0, 10)
-	case "quote":
-		return command.NewSecurityQuotesCommand([]model.Symbol{{Market: model.MarketSH, Code: "600519"}})
-	case "market-stat":
-		return command.NewSecurityQuotesCommand([]model.Symbol{{Market: model.MarketSH, Code: "880005"}})
-	case "minute":
-		return command.NewMinuteTimeDataCommand(model.MarketSH, "600519")
-	case "transaction":
-		return command.NewTransactionDataCommand(model.MarketSH, "600519", 0, 50)
-	case "fund-flow":
-		return command.NewTransactionDataCommand(model.MarketSH, "600519", 0, 2000)
-	case "history-fund-flow":
-		return command.NewHistoryFundFlowCommand(model.MarketSH, "600519", 0, 10)
-	case "finance":
-		return command.NewFinanceInfoCommand(model.MarketSH, "600519")
-	case "xdxr":
-		return command.NewXdxrInfoCommand(model.MarketSH, "600519")
-	case "company":
-		return command.NewCompanyInfoCategoryCommand(model.MarketSH, "600519")
-	case "block-meta":
-		return command.NewBlockInfoMetaCommand("block_gn.dat")
-	case "block":
-		return command.NewBlockInfoCommand("block_gn.dat", 0, 30000)
-	case "report":
-		return command.NewReportFileCommand("base_info.zip", 0, 30000)
-	default:
-		return command.NewSecurityCountCommand(market)
+type probeOptions struct {
+	Op      string
+	Market  string
+	Code    string
+	Symbols string
+	Date    int
+	Start   int
+	Count   int
+	File    string
+}
+
+func commandForOptions(opts probeOptions) (command.Command, error) {
+	market := parseMarket(opts.Market)
+	code := defaultCode(opts.Code, market)
+	count := opts.Count
+	if count <= 0 {
+		count = 10
 	}
+	switch strings.ToLower(opts.Op) {
+	case "security-list":
+		return command.NewSecurityListCommand(market, opts.Start), nil
+	case "stock-bars":
+		return command.NewSecurityBarsCommand(market, code, model.KlineDay, opts.Start, count), nil
+	case "index-bars":
+		if opts.Code == "" {
+			code = "000001"
+			market = model.MarketSH
+		}
+		return command.NewIndexBarsCommand(market, code, model.KlineDay, opts.Start, count), nil
+	case "quote":
+		symbols, err := parseSymbols(opts.Symbols)
+		if err != nil {
+			return nil, err
+		}
+		if len(symbols) == 0 {
+			symbols = []model.Symbol{{Market: market, Code: code}}
+		}
+		return command.NewSecurityQuotesCommand(symbols), nil
+	case "market-stat":
+		return command.NewSecurityQuotesCommand([]model.Symbol{{Market: model.MarketSH, Code: "880005"}}), nil
+	case "minute":
+		return command.NewMinuteTimeDataCommand(market, code), nil
+	case "history-minute":
+		if opts.Date <= 0 {
+			return nil, fmt.Errorf("history-minute requires -date YYYYMMDD")
+		}
+		return command.NewHistoryMinuteTimeDataCommand(market, code, opts.Date), nil
+	case "transaction":
+		if opts.Count <= 0 {
+			count = 50
+		}
+		return command.NewTransactionDataCommand(market, code, opts.Start, count), nil
+	case "history-transaction":
+		if opts.Date <= 0 {
+			return nil, fmt.Errorf("history-transaction requires -date YYYYMMDD")
+		}
+		if opts.Count <= 0 {
+			count = 50
+		}
+		return command.NewHistoryTransactionDataCommand(market, code, opts.Date, opts.Start, count), nil
+	case "fund-flow":
+		if opts.Count <= 0 {
+			count = 2000
+		}
+		return command.NewTransactionDataCommand(market, code, opts.Start, count), nil
+	case "history-fund-flow":
+		return command.NewHistoryFundFlowCommand(market, code, opts.Start, count), nil
+	case "finance":
+		return command.NewFinanceInfoCommand(market, code), nil
+	case "xdxr":
+		return command.NewXdxrInfoCommand(market, code), nil
+	case "company":
+		return command.NewCompanyInfoCategoryCommand(market, code), nil
+	case "block-meta":
+		return command.NewBlockInfoMetaCommand(defaultFile(opts.File, "block_gn.dat")), nil
+	case "block":
+		return command.NewBlockInfoCommand(defaultFile(opts.File, "block_gn.dat"), opts.Start, defaultCount(opts.Count, 30000)), nil
+	case "report":
+		return command.NewReportFileCommand(defaultFile(opts.File, "base_info.zip"), opts.Start, defaultCount(opts.Count, 30000)), nil
+	default:
+		return command.NewSecurityCountCommand(market), nil
+	}
+}
+
+func commandFor(op string, market model.Market) command.Command {
+	cmd, err := commandForOptions(probeOptions{Op: op, Market: market.String()})
+	if err != nil {
+		return command.UnsupportedCommand{Name: op}
+	}
+	return cmd
 }
 
 func parseMarket(raw string) model.Market {
@@ -106,4 +185,59 @@ func parseMarket(raw string) model.Market {
 	default:
 		return model.MarketSH
 	}
+}
+
+func parseSymbols(raw string) ([]model.Symbol, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]model.Symbol, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		pair := strings.Split(part, ":")
+		switch len(pair) {
+		case 2:
+			code := strings.TrimSpace(pair[1])
+			if code == "" {
+				return nil, fmt.Errorf("symbol %q has empty code", part)
+			}
+			out = append(out, model.Symbol{Market: parseMarket(pair[0]), Code: code})
+		default:
+			return nil, fmt.Errorf("symbol %q must use market:code", part)
+		}
+	}
+	return out, nil
+}
+
+func defaultCode(code string, market model.Market) string {
+	code = strings.TrimSpace(code)
+	if code != "" {
+		return code
+	}
+	switch market {
+	case model.MarketSZ:
+		return "000001"
+	default:
+		return "600519"
+	}
+}
+
+func defaultFile(file string, fallback string) string {
+	file = strings.TrimSpace(file)
+	if file == "" {
+		return fallback
+	}
+	return file
+}
+
+func defaultCount(count int, fallback int) int {
+	if count <= 0 {
+		return fallback
+	}
+	return count
 }
