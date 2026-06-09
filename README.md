@@ -7,7 +7,7 @@
 这个仓库可以作为两类东西使用：
 
 - Go 第三方库：业务系统直接 `import "github.com/quantbeing/tdx"` 调用行情、K 线、快照、分时、逐笔、财务、板块、报表等接口。
-- 协议诊断工具：用 `tdx-health`、`tdx-probe`、`tdx-fixture-matrix`、`tdx-dump-frame`、`tdx-compare-py` 做公网节点探测、raw fixture 抓取、Python 对照和协议反推。
+- 协议诊断工具：用 `tdx-health`、`tdx-probe`、`tdx-data-probe`、`tdx-fixture-matrix`、`tdx-dump-frame`、`tdx-compare-py` 做公网节点探测、官方数据包 fallback 探测、raw fixture 抓取、Python 对照和协议反推。
 
 当前仍是 v0 阶段，接口已经按稳定 API 方向组织，但通达信公网服务器和非官方协议本身存在不稳定性。生产接入时请保留超时、重试、host failover、fixture 对照和运行指标。
 
@@ -438,6 +438,27 @@ report
 | `-start 0` / `-count 50` | 分页或 chunk command 的起点和数量。 |
 | `-file base_info.zip` | 板块、报表文件 command 的文件名。 |
 
+### Official Data Package Probe
+
+`tdx-data-probe` 用于探测通达信官方 HTTP 数据包清单，当前主要服务于 BJ/全市场 fallback 调查。它不走 HQ `7709` TCP 协议，因此不要把它当作 `Client` 主链路的一部分；它是诊断和后续 fallback parser 的证据入口。
+
+```bash
+go run ./cmd/tdx-data-probe -timeout 15s -limit 8
+go run ./cmd/tdx-data-probe -timeout 15s -prefix gpbj -limit 8
+go run ./cmd/tdx-data-probe -kind local-index -timeout 15s -prefix gpbj -limit 8
+```
+
+输出 JSON 摘要：
+
+| Flag | 用途 |
+|---|---|
+| `-kind manifest|local-index` | `manifest` 解析 `filename,md5,size` 清单；`local-index` 解析 `.local` 文件中的 `[MD5]` 段。 |
+| `-url` | 自定义官方数据包 URL；`local-index` 默认会切到 `https://data.tdx.com.cn/tdxgp/gpszsh.local`。 |
+| `-prefix gpbj` | 按文件名前缀过滤，例如只看 BJ 候选 `gpbj*.dat`。 |
+| `-limit 20` | JSON 中最多输出多少条 entry；`-1` 输出全部。 |
+
+2026-06-10 live 观察：`gpszsh.txt` manifest 当前有 `7240` 个条目，其中 `gpbj*.dat` 为 `319` 个；`gpszsh.local` 的 `[MD5]` 段同样能枚举 `319` 个 `gpbj` 条目。manifest/local-index/HTTP 文件的 MD5 与 size 语义存在不一致样本，现阶段只作为诊断 finding，不作为强完整性校验。
+
 ### Live Fixture Matrix
 
 ```bash
@@ -545,6 +566,7 @@ Live smoke：
 
 ```bash
 go run ./cmd/tdx-probe -op security-count -market sh -timeout 5s
+go run ./cmd/tdx-data-probe -prefix gpbj -limit 5
 TDX_LIVE=1 go run ./cmd/tdx-validate -markets sh -symbols sh:600519 -kline day -skip-boards -skip-files
 TDX_LIVE=1 go run ./cmd/tdx-validate -markets sh,sz -symbols sh:600519 -full-security-list -security-list-page-retries 1 -operation-timeout 30s -skip-boards -skip-files
 ```
@@ -557,15 +579,16 @@ Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
 - `TDX_LIVE=1 tdx-validate -markets sh -symbols sh:600519 -skip-boards -skip-files`：12 项检查，10 OK，2 个公网超时错误，0 warnings；核心 count/list/quote/day-bar/minute/transaction/finance/xdxr/company 均通过。
 - `TDX_LIVE=1 tdx-validate -markets sh,sz -symbols sh:600519,sz:000001 -skip-boards -skip-files`：14 项检查，12 OK，2 个公网超时错误，0 warnings；multi-market quote 返回 2 行并通过 symbol 完整性校验。
 - `tdx-validate -full-security-list` 已支持全市场分页完整性校验；默认 smoke 为了速度仍只查第 0 页。最新 SH/SZ live baseline 加上 `-security-list-page-retries 1` 后分别拉完 27215/23411 行，若干分页首次失败后重试成功并保留 warning。
-- BJ live baseline 中 `security_count_BJ=345`，但 `security_list_BJ_page_0` 在 15s timeout、3 次 page retry 下仍超时，BJ full universe 仍需 report/base-info fallback。
+- BJ live baseline 中 `security_count_BJ=345`，但 `security_list_BJ_page_0` 在 15s timeout、3 次 page retry 下仍超时。`tdx-data-probe` 已确认官方 `tdxgp/gpszsh.txt` 与 `gpszsh.local` 可枚举 `319` 个 `gpbj*.dat` 候选，但还不能替代完整 BJ 证券列表。
 - `TDX_LIVE=1 tdx-validate` 含 boards/files：`boards_concept` 返回 270 行，`report_file_base_info.zip` 在当前公网节点返回 0 字节，仍需 fallback/节点矩阵继续反推。
-- 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `34.0 us/op`，minute parser 约 `9.1 us/op`，5000 行 universe validation 约 `244.0 us/op`，80 符号 quote 分片 client benchmark 约 `15.5 us/op`。完整输出记录在 handoff 文档。
+- 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `34.0 us/op`，minute parser 约 `9.1 us/op`，5000 行 universe validation 约 `244.0 us/op`，80 符号 quote 分片 client benchmark 约 `15.5 us/op`。新增官方数据包 parser benchmark 中，7240 行 manifest 约 `1.47 ms/op`，7240 行 `.local` index 约 `1.32 ms/op`。完整输出记录在 handoff 文档。
 
 ## Known Limits
 
 - 通达信 HQ 协议不是官方公开协议，字段含义需要通过 fixture 持续反推。
 - 公网 TDX 服务器按 operation/market 表现不一致，能握手不代表所有接口可用。
 - BJ 全量列表在公网节点上不稳定，目前通过 partial result 和 report/base info fallback 预留处理空间。
+- 官方 HTTP 数据包已能枚举 `gpbj*.dat`，但 `.dat` 记录格式、名称来源、MD5/size 语义仍需 fixture 和 parser 继续反推。
 - 更丰富的扩展市场接口仍在待解析状态。
 - 资金流中，当日资金流是逐笔成交聚合结果；历史资金流优先 category 22，空回包时 fallback 重算。
 
@@ -579,6 +602,7 @@ Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
 4. 证券列表用 `ListSecurities` 或 `ListAShares`，读取 partial failures。
 5. 批量快照用 `GetSecurityQuotes`，它会自动分片。
 6. 需要反推协议字段时用 `Client.Capture` 或 `tdx-probe -capture-dir`。
-7. 和 pytdx/xmtdx 对照时用 `tdx-compare-py`。
-8. 遇到故障复现时用 `tdxtest.StartScript` 写 fake server 测试。
-9. 发布前用 `tdx-validate` 跑 live 完整性报告，并用 `go test -bench=. -benchmem` 更新性能基线。
+7. 调查官方数据包 fallback 时用 `tdx-data-probe -prefix gpbj` 和 `tdx-data-probe -kind local-index -prefix gpbj`。
+8. 和 pytdx/xmtdx 对照时用 `tdx-compare-py`。
+9. 遇到故障复现时用 `tdxtest.StartScript` 写 fake server 测试。
+10. 发布前用 `tdx-validate` 跑 live 完整性报告，并用 `go test -bench=. -benchmem` 更新性能基线。

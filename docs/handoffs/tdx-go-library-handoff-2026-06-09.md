@@ -283,6 +283,8 @@ Latest live runs in this environment, on 2026-06-09 around 21:04-21:06 Asia/Shan
 - Latest page-retry SH smoke with `-security-list-page-retries 1` completed `security_list_SH_full` with 27215 rows in 39266 ms. Pages 5000, 11000, 17000, and 23000 had first-attempt timeout warnings and then succeeded.
 - 2026-06-10 SZ baseline completed `security_list_SZ_full` with 23411 rows in 38739 ms. Pages 5000, 11000, 17000, and 23000 had first-attempt timeout warnings and then succeeded.
 - 2026-06-10 BJ baseline returned `security_count_BJ=345`, but `security_list_BJ_page_0` still failed with 15s operation timeout and 3 page retries. Aggregate `security_list_BJ_full` remained 0/345 rows.
+- 2026-06-10 official data-package probe added `tdx-data-probe`. `gpszsh.txt` returned 7240 entries, and `-prefix gpbj` returned 319 BJ candidate `.dat` files. `gpszsh.local` `[MD5]` parsing also returned 319 `gpbj` entries.
+- Data-package integrity caveat: manifest/local-index/HTTP file MD5 and size semantics are not direct strong checks in sampled live data. For example, some same-name files had different manifest and `.local` MD5 values, and one sampled `.dat` content length differed from manifest size by 13 bytes.
 - Passed across these runs: SH/SZ count and first security-list pages, single-symbol quote, multi-market quote, day bars, minute-time structural check, transaction page when public server responded, market stat, finance, XDXR, company category, and `boards_concept` with 270 rows.
 - Failed due current public-server behavior: `fund_flow_SH_600519` and `history_fund_flow_SH_600519` intermittently hit transaction/history-transaction timeout; `report_file_base_info.zip` returned 0 bytes in the files smoke.
 - Prior minute-time negative-volume warnings are gone after parsing the live real-time symbol prefix. Prior multi-market quote bad second symbol is gone after fixing quote parser offset shadowing.
@@ -327,10 +329,18 @@ BenchmarkValidateQuotes                 10246 ns/op     11472 B/op     166 alloc
 BenchmarkClientGetSecurityQuotesBatchSplit 15453 ns/op 192769 B/op     169 allocs/op
 ```
 
+Additional 2026-06-10 data-package parser benchmark:
+
+```text
+BenchmarkParseDataPackageManifest-8      1465961 ns/op  2120291 B/op  14527 allocs/op
+BenchmarkParseDataPackageLocalIndex-8    1323101 ns/op  1969641 B/op  14517 allocs/op
+```
+
 Remaining validation work:
 
 - Compare the captured multi-symbol/multi-market quote and minute-time fixtures with pytdx/xmtdx JSON outputs.
-- Implement BJ fallback collection from protocol-accessible files such as `base_info.zip` or related report/security files, then validate against `security_count_BJ=345`.
+- Implement BJ fallback collection from official `gpbj*.dat` data-package candidates and protocol-accessible files such as `base_info.zip` or related report/security files, then validate against `security_count_BJ=345`.
+- Parse sampled `gpbj*.dat` payloads with fixture-backed tests; current xxd suggests fixed 13-byte records, but field meanings and whether names/security metadata are present are unknown.
 - Add a durable performance report artifact after each major parser/client change.
 - Extend report-file fallback and node matrix checks because public `base_info.zip` can return 0 bytes.
 - Keep fund-flow/history-fund-flow in live validation, but treat public-server transaction timeouts as environment-dependent until more host-operation fixtures are collected.
@@ -339,7 +349,7 @@ Remaining validation work:
 
 - Current library covers HQ `7709` core market data, not every TDX protocol family.
 - Public TDX servers are inconsistent by operation and market. A host that succeeds on setup may fail on `security_list`, BJ list, history fund flow, or report files.
-- BJ full universe remains partial. The client returns partial result metadata, but robust fallback through `base_info.zip`, securities files, or report-file-derived data still needs implementation.
+- BJ full universe remains partial. The client returns partial result metadata, and `tdx-data-probe` can enumerate 319 official `gpbj*.dat` candidates, but robust fallback names/full metadata through data packages, `base_info.zip`, securities files, or report-file-derived data still needs implementation.
 - `GetMarketStat` is a canonical helper based on SH `880005` quote fields, not a separately verified standalone command.
 - Today `GetFundFlow` is derived from transaction aggregation using xmtdx-style amount thresholds.
 - History fund flow prefers category 22 direct response; if empty, it falls back to day-bar dates plus historical transaction aggregation.
@@ -406,16 +416,19 @@ Implement a stable BJ list fallback instead of relying only on public-server `se
 
 Suggested route:
 
-1. Fetch `base_info.zip` or other securities/report files through `GetReportFile`.
-2. Decode zip/file structure.
-3. Extract securities into `model.Security` or a dedicated fallback model.
-4. Merge with direct `security_list` partial result.
-5. Preserve failure metadata in `model.PartialResult`.
+1. Use `go run ./cmd/tdx-data-probe -prefix gpbj -limit 8` and `go run ./cmd/tdx-data-probe -kind local-index -prefix gpbj -limit 8` to confirm current official data-package candidates.
+2. Capture small `gpbj*.dat` samples as fixtures without committing large binaries unless needed.
+3. Decode the `.dat` record structure with tests; do not enforce manifest/local-index MD5 until checksum semantics are known.
+4. Fetch `base_info.zip` or other securities/report files through `GetReportFile` and compare with data-package candidates.
+5. Extract securities into `model.Security` or a dedicated fallback model.
+6. Merge with direct `security_list` partial result.
+7. Preserve failure metadata in `model.PartialResult`.
 
 Files likely to change:
 
 - `client.go`
 - `command/company_files.go`
+- `diagnostic/data_package.go`
 - `model/types.go`
 - new parser package or file for report/base-info decoding
 - `client_test.go`

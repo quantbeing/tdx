@@ -92,9 +92,70 @@ Interpretation:
 - Increasing page retries from 1 to 3 and operation timeout from 8s to 15s did not recover BJ page 0.
 - BJ full universe should remain partial until fallback sources are implemented and validated.
 
+## Official Data Package Probe
+
+After the BJ HQ list timeout, `tdx-data-probe` was added to inspect the official TDX HTTP data package surface.
+
+Manifest command:
+
+```bash
+go run ./cmd/tdx-data-probe -timeout 15s -limit 8
+```
+
+Result:
+
+- Source: `https://data.tdx.com.cn/tdxgp/gpszsh.txt`
+- Entry count: `7240`
+- Total declared size: `1538883256`
+- Local files: `1`
+- Dat files: `7239`
+- Skipped lines: `0`
+
+BJ manifest filter:
+
+```bash
+go run ./cmd/tdx-data-probe -timeout 15s -prefix gpbj -limit 8
+```
+
+Result:
+
+- Entry count: `319`
+- Dat files: `319`
+- Total declared size: `30113577`
+- First returned candidates include `gpbj920992.dat`, `gpbj920985.dat`, `gpbj920982.dat`, `gpbj920981.dat`.
+
+Local index filter:
+
+```bash
+go run ./cmd/tdx-data-probe -kind local-index -timeout 15s -prefix gpbj -limit 8
+```
+
+Result:
+
+- Source: `https://data.tdx.com.cn/tdxgp/gpszsh.local`
+- Entry count: `319`
+- Dat files: `319`
+- Skipped lines: `0`
+- First returned candidates include the same `gpbj920xxx.dat` filenames.
+
+Important integrity finding:
+
+- `gpszsh.local` is an INI-style `[MD5]` index, not a securities table.
+- Some manifest MD5 values differ from the `.local` index values for the same file, for example `gpbj920985.dat` in this live run.
+- At least one sampled `.dat` file had HTTP `Content-Length` differing from manifest `size` by one 13-byte record, and direct file MD5 did not match the manifest MD5.
+- Therefore these fields are useful as diagnostic evidence but must not become hard integrity validation until the official update/checksum semantics are understood.
+
+Interpretation:
+
+- Official HTTP data packages give a validated BJ candidate-file fallback surface even when HQ `security_list_BJ_page_0` times out.
+- They currently enumerate `319` `gpbj*.dat` candidates, while HQ `security_count_BJ` reports `345`; this is useful but not a complete BJ securities list.
+- The `.dat` payload appears record-oriented and still needs fixture-backed parser work before it can provide names, status, or canonical security metadata.
+
 ## Next Work
 
-- Add BJ fallback collection from protocol-accessible files such as `base_info.zip` or related report/security files.
+- Add BJ fallback collection from official data package candidates and protocol-accessible files such as `base_info.zip` or related report/security files.
+- Parse sampled `gpbj*.dat` fixtures with tests; determine record length, date/price fields, and whether names/security metadata are present elsewhere.
+- Investigate official data package checksum/update semantics before enforcing MD5 or size.
 - Build a host-operation matrix specifically for `security_list_BJ_page_0`.
 - Consider exposing full-list retry budgets separately from general operation timeout if longer BJ probing is needed.
 - Keep SH/SZ full-list validation in live smoke with `-security-list-page-retries 1`.
