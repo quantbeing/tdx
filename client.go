@@ -1,0 +1,1123 @@
+package tdx
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"sync"
+	"time"
+
+	"github.com/quantbeing/tdx/command"
+	"github.com/quantbeing/tdx/frame"
+	"github.com/quantbeing/tdx/model"
+)
+
+type Options struct {
+	Servers        []model.Server
+	Timeout        time.Duration
+	MaxAttempts    int
+	Dialer         Dialer
+	Transport      TransportOptions
+	CircuitBreaker CircuitBreakerOptions
+	Pool           PoolOptions
+}
+
+type TransportOptions struct {
+	ConnectTimeout time.Duration
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
+}
+
+type PoolOptions struct {
+	MaxIdlePerHost int
+	Disable        bool
+}
+
+type CircuitBreakerOptions struct {
+	FailureThreshold int
+	Cooldown         time.Duration
+}
+
+const DefaultFileChunkSize = 30000
+const MaxFileChunks = 256
+
+type Dialer interface {
+	DialTDX(ctx context.Context, server model.Server, opts TransportOptions) (RoundTripper, error)
+}
+
+type DialerFunc func(ctx context.Context, server model.Server, opts TransportOptions) (RoundTripper, error)
+
+func (f DialerFunc) DialTDX(ctx context.Context, server model.Server, opts TransportOptions) (RoundTripper, error) {
+	return f(ctx, server, opts)
+}
+
+type RoundTripper interface {
+	RoundTrip(ctx context.Context, cmd command.Command) (any, error)
+	Close() error
+}
+
+type RawRoundTripper interface {
+	RoundTripRaw(ctx context.Context, cmd command.Command) (CapturedResponse, error)
+}
+
+type CapturedResponse struct {
+	Operation   string        `json:"operation"`
+	Server      model.Server  `json:"server"`
+	Attempt     int           `json:"attempt"`
+	Latency     time.Duration `json:"latency"`
+	Request     []byte        `json:"request"`
+	Header      frame.Header  `json:"header"`
+	HeaderBytes []byte        `json:"header_bytes"`
+	RawBody     []byte        `json:"raw_body"`
+	Body        []byte        `json:"body"`
+	Parsed      any           `json:"parsed"`
+}
+
+type Client struct {
+	mu              sync.Mutex
+	servers         []model.Server
+	stats           []model.ServerStat
+	opStats         map[string][]model.ServerStat
+	opFailures      map[string][]int
+	opCoolUntil     map[string][]time.Time
+	idle            [][]RoundTripper
+	next            int
+	dialer          Dialer
+	opts            Options
+	attempts        int
+	breakerFailure  int
+	breakerCooldown time.Duration
+	maxIdlePerHost  int
+}
+
+func NewClient(opts Options) *Client {
+	if opts.Timeout <= 0 {
+		opts.Timeout = 15 * time.Second
+	}
+	if opts.Transport.ConnectTimeout <= 0 {
+		opts.Transport.ConnectTimeout = opts.Timeout
+	}
+	if opts.Transport.ReadTimeout <= 0 {
+		opts.Transport.ReadTimeout = opts.Timeout
+	}
+	if opts.Transport.WriteTimeout <= 0 {
+		opts.Transport.WriteTimeout = opts.Timeout
+	}
+	if opts.Dialer == nil {
+		opts.Dialer = NetDialer{}
+	}
+	breakerFailure := opts.CircuitBreaker.FailureThreshold
+	if breakerFailure <= 0 {
+		breakerFailure = 3
+	}
+	breakerCooldown := opts.CircuitBreaker.Cooldown
+	if breakerCooldown <= 0 {
+		breakerCooldown = 30 * time.Second
+	}
+	maxIdlePerHost := opts.Pool.MaxIdlePerHost
+	if opts.Pool.Disable {
+		maxIdlePerHost = 0
+	} else if maxIdlePerHost <= 0 {
+		maxIdlePerHost = 1
+	}
+	if len(opts.Servers) == 0 {
+		opts.Servers = KnownServers()
+	}
+	attempts := opts.MaxAttempts
+	if attempts <= 0 || attempts > len(opts.Servers) {
+		attempts = len(opts.Servers)
+	}
+	stats := make([]model.ServerStat, len(opts.Servers))
+	for i, s := range opts.Servers {
+		stats[i] = model.ServerStat{Server: s, Score: 1}
+	}
+	return &Client{
+		servers:         append([]model.Server(nil), opts.Servers...),
+		stats:           stats,
+		opStats:         make(map[string][]model.ServerStat),
+		opFailures:      make(map[string][]int),
+		opCoolUntil:     make(map[string][]time.Time),
+		idle:            make([][]RoundTripper, len(opts.Servers)),
+		dialer:          opts.Dialer,
+		opts:            opts,
+		attempts:        attempts,
+		breakerFailure:  breakerFailure,
+		breakerCooldown: breakerCooldown,
+		maxIdlePerHost:  maxIdlePerHost,
+	}
+}
+
+func KnownServers() []model.Server {
+	return []model.Server{
+		{Name: "tdx-sh-170", Host: "180.153.18.170", Port: 7709},
+		{Name: "tdx-sh-171", Host: "180.153.18.171", Port: 7709},
+		{Name: "tdx-sh-172", Host: "180.153.18.172", Port: 7709},
+		{Name: "tdx-hz-198", Host: "115.238.56.198", Port: 7709},
+		{Name: "tdx-hz-165", Host: "115.238.90.165", Port: 7709},
+		{Name: "tdx-sz-81", Host: "119.147.212.81", Port: 7709},
+		{Name: "tdx-qb-14", Host: "123.125.108.14", Port: 7709},
+		{Name: "tdx-qb-114", Host: "110.41.147.114", Port: 7709},
+		{Name: "tdx-qb-72", Host: "110.41.2.72", Port: 7709},
+	}
+}
+
+func FromBestHost(ctx context.Context, opts Options) (*Client, error) {
+	results := PingAll(ctx, opts.Servers, opts.Transport)
+	if len(results) == 0 {
+		return NewClient(opts), errors.New("tdx: no reachable hosts during ping")
+	}
+	opts.Servers = []model.Server{results[0].Server}
+	return NewClient(opts), nil
+}
+
+type PingResult struct {
+	Server  model.Server  `json:"server"`
+	Latency time.Duration `json:"latency"`
+	Error   string        `json:"error,omitempty"`
+}
+
+func PingAll(ctx context.Context, servers []model.Server, opts TransportOptions) []PingResult {
+	if len(servers) == 0 {
+		servers = KnownServers()
+	}
+	out := make(chan PingResult, len(servers))
+	for _, server := range servers {
+		server := server
+		go func() {
+			start := time.Now()
+			rt, err := NetDialer{}.DialTDX(ctx, server, opts)
+			if err != nil {
+				out <- PingResult{Server: server, Error: err.Error()}
+				return
+			}
+			_ = rt.Close()
+			out <- PingResult{Server: server, Latency: time.Since(start)}
+		}()
+	}
+	results := make([]PingResult, 0, len(servers))
+	for range servers {
+		res := <-out
+		if res.Error == "" {
+			results = append(results, res)
+		}
+	}
+	for i := 0; i < len(results); i++ {
+		for j := i + 1; j < len(results); j++ {
+			if results[j].Latency < results[i].Latency {
+				results[i], results[j] = results[j], results[i]
+			}
+		}
+	}
+	return results
+}
+
+func (c *Client) Close() error {
+	conns := c.drainIdle()
+	var firstErr error
+	for _, rt := range conns {
+		if err := rt.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (c *Client) SetServers(servers []model.Server) {
+	for _, rt := range c.drainIdle() {
+		_ = rt.Close()
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.servers = append([]model.Server(nil), servers...)
+	c.stats = make([]model.ServerStat, len(servers))
+	for i, s := range servers {
+		c.stats[i] = model.ServerStat{Server: s, Score: 1}
+	}
+	c.opStats = make(map[string][]model.ServerStat)
+	c.opFailures = make(map[string][]int)
+	c.opCoolUntil = make(map[string][]time.Time)
+	c.idle = make([][]RoundTripper, len(servers))
+	c.next = 0
+	if c.opts.MaxAttempts <= 0 || c.opts.MaxAttempts > len(servers) {
+		c.attempts = len(servers)
+	} else {
+		c.attempts = c.opts.MaxAttempts
+	}
+}
+
+func (c *Client) ServerStats() []model.ServerStat {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.refreshGlobalCoolingLocked(time.Now())
+	return append([]model.ServerStat(nil), c.stats...)
+}
+
+func (c *Client) OperationStats(op string) []model.ServerStat {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	stats := c.ensureOperationLocked(op)
+	c.refreshOperationCoolingLocked(op, time.Now())
+	return append([]model.ServerStat(nil), stats...)
+}
+
+func (c *Client) Ping(ctx context.Context) error {
+	_, err := c.GetSecurityCount(ctx, model.MarketSH)
+	return err
+}
+
+func (c *Client) HealthCheck(ctx context.Context, ops ...command.Command) []OperationHealth {
+	if len(ops) == 0 {
+		ops = []command.Command{command.NewSecurityCountCommand(model.MarketSH)}
+	}
+	out := make([]OperationHealth, 0, len(ops))
+	for _, op := range ops {
+		start := time.Now()
+		_, err := c.execute(ctx, op)
+		h := OperationHealth{Operation: op.Operation(), Latency: time.Since(start), OK: err == nil}
+		if err != nil {
+			h.Error = err.Error()
+		}
+		out = append(out, h)
+	}
+	return out
+}
+
+func (c *Client) Capture(ctx context.Context, cmd command.Command) (CapturedResponse, error) {
+	var lastErr error
+	attempts := c.attempts
+	if attempts <= 0 {
+		attempts = 1
+	}
+	for attempt := 0; attempt < attempts; attempt++ {
+		idx, server := c.pickServer(cmd.Operation())
+		rt, err := c.acquire(ctx, idx, server)
+		if err != nil {
+			lastErr = err
+			c.report(idx, cmd.Operation(), err, 0)
+			continue
+		}
+		rawRT, ok := rt.(RawRoundTripper)
+		if !ok {
+			c.release(idx, rt, false)
+			err := fmt.Errorf("tdx round tripper for %s does not support capture", server.Addr())
+			lastErr = err
+			c.report(idx, cmd.Operation(), err, 0)
+			continue
+		}
+		start := time.Now()
+		out, err := rawRT.RoundTripRaw(ctx, cmd)
+		latency := time.Since(start)
+		if err != nil {
+			c.release(idx, rt, false)
+			lastErr = fmt.Errorf("%s capture via %s attempt %d: %w", cmd.Operation(), server.Addr(), attempt+1, err)
+			c.report(idx, cmd.Operation(), err, latency)
+			continue
+		}
+		c.release(idx, rt, true)
+		out.Operation = cmd.Operation()
+		out.Server = server
+		out.Attempt = attempt + 1
+		out.Latency = latency
+		c.report(idx, cmd.Operation(), nil, latency)
+		return out, nil
+	}
+	if lastErr == nil {
+		lastErr = errors.New("tdx: no capture attempts executed")
+	}
+	return CapturedResponse{}, lastErr
+}
+
+type OperationHealth struct {
+	Operation string        `json:"operation"`
+	OK        bool          `json:"ok"`
+	Latency   time.Duration `json:"latency"`
+	Error     string        `json:"error,omitempty"`
+}
+
+func (c *Client) GetSecurityCount(ctx context.Context, market model.Market) (uint16, error) {
+	got, err := c.execute(ctx, command.NewSecurityCountCommand(market))
+	if err != nil {
+		return 0, err
+	}
+	count, ok := got.(uint16)
+	if !ok {
+		return 0, fmt.Errorf("tdx security_count unexpected reply %T", got)
+	}
+	return count, nil
+}
+
+func (c *Client) GetSecurityList(ctx context.Context, market model.Market, start int) ([]model.Security, error) {
+	got, err := c.execute(ctx, command.NewSecurityListCommand(market, start))
+	if err != nil {
+		return nil, err
+	}
+	items, ok := got.([]model.Security)
+	if !ok {
+		return nil, fmt.Errorf("tdx security_list unexpected reply %T", got)
+	}
+	return items, nil
+}
+
+func (c *Client) ListSecurities(ctx context.Context, markets ...model.Market) (model.PartialResult[model.Security], error) {
+	if len(markets) == 0 {
+		markets = []model.Market{model.MarketSH, model.MarketSZ, model.MarketBJ}
+	}
+	var result model.PartialResult[model.Security]
+	for _, market := range markets {
+		count, err := c.GetSecurityCount(ctx, market)
+		if err != nil {
+			result.Failures = append(result.Failures, model.OperationError{Operation: "security_count", Market: market, Err: err.Error()})
+			continue
+		}
+		for start := 0; start < int(count); start += 1000 {
+			items, err := c.GetSecurityList(ctx, market, start)
+			if err != nil {
+				result.Failures = append(result.Failures, model.OperationError{Operation: "security_list", Market: market, Start: start, Count: 1000, Err: err.Error()})
+				break
+			}
+			if len(items) == 0 {
+				break
+			}
+			result.Items = append(result.Items, items...)
+			if len(items) < 1000 {
+				break
+			}
+		}
+	}
+	if len(result.Failures) > 0 {
+		return result, fmt.Errorf("tdx list securities partial failures: %d", len(result.Failures))
+	}
+	return result, nil
+}
+
+func (c *Client) ListAShares(ctx context.Context) (model.PartialResult[model.Security], error) {
+	all, err := c.ListSecurities(ctx, model.MarketSH, model.MarketSZ, model.MarketBJ)
+	filtered := all.Items[:0]
+	for _, sec := range all.Items {
+		if isAshare(sec.Market, sec.Code) {
+			filtered = append(filtered, sec)
+		}
+	}
+	all.Items = filtered
+	return all, err
+}
+
+func (c *Client) ListMarkets(context.Context) []model.Market {
+	return []model.Market{model.MarketSH, model.MarketSZ, model.MarketBJ}
+}
+
+func (c *Client) GetSecurityBars(ctx context.Context, market model.Market, code string, category model.KlineCategory, start, count int) ([]model.Bar, error) {
+	got, err := c.execute(ctx, command.NewSecurityBarsCommand(market, code, category, start, count))
+	if err != nil {
+		return nil, err
+	}
+	return got.([]model.Bar), nil
+}
+
+func (c *Client) GetIndexBars(ctx context.Context, market model.Market, code string, category model.KlineCategory, start, count int) ([]model.Bar, error) {
+	got, err := c.execute(ctx, command.NewIndexBarsCommand(market, code, category, start, count))
+	if err != nil {
+		return nil, err
+	}
+	return got.([]model.Bar), nil
+}
+
+func (c *Client) GetBars(ctx context.Context, market model.Market, code string, category model.KlineCategory, start, count int) ([]model.Bar, error) {
+	if isIndexLike(market, code) {
+		return c.GetIndexBars(ctx, market, code, category, start, count)
+	}
+	return c.GetSecurityBars(ctx, market, code, category, start, count)
+}
+
+func (c *Client) GetSecurityQuotes(ctx context.Context, symbols []model.Symbol) ([]model.Quote, error) {
+	out := make([]model.Quote, 0, len(symbols))
+	for start := 0; start < len(symbols); start += command.MaxQuoteBatch {
+		end := start + command.MaxQuoteBatch
+		if end > len(symbols) {
+			end = len(symbols)
+		}
+		got, err := c.execute(ctx, command.NewSecurityQuotesCommand(symbols[start:end]))
+		if err != nil {
+			return nil, err
+		}
+		quotes, ok := got.([]model.Quote)
+		if !ok {
+			return nil, fmt.Errorf("tdx security_quotes unexpected reply %T", got)
+		}
+		out = append(out, quotes...)
+	}
+	return out, nil
+}
+
+func (c *Client) GetSnapshot(ctx context.Context, symbols []model.Symbol) ([]model.Quote, error) {
+	return c.GetSecurityQuotes(ctx, symbols)
+}
+
+func (c *Client) GetMinuteTimeData(ctx context.Context, market model.Market, code string) ([]model.MinuteTime, error) {
+	got, err := c.execute(ctx, command.NewMinuteTimeDataCommand(market, code))
+	if err != nil {
+		return nil, err
+	}
+	items, ok := got.([]model.MinuteTime)
+	if !ok {
+		return nil, fmt.Errorf("tdx minute_time unexpected reply %T", got)
+	}
+	return items, nil
+}
+func (c *Client) GetHistoryMinuteTimeData(ctx context.Context, market model.Market, code string, date int) ([]model.MinuteTime, error) {
+	got, err := c.execute(ctx, command.NewHistoryMinuteTimeDataCommand(market, code, date))
+	if err != nil {
+		return nil, err
+	}
+	items, ok := got.([]model.MinuteTime)
+	if !ok {
+		return nil, fmt.Errorf("tdx history_minute_time unexpected reply %T", got)
+	}
+	return items, nil
+}
+func (c *Client) GetTransactionData(ctx context.Context, market model.Market, code string, start int, count int) ([]model.Transaction, error) {
+	got, err := c.execute(ctx, command.NewTransactionDataCommand(market, code, start, count))
+	if err != nil {
+		return nil, err
+	}
+	items, ok := got.([]model.Transaction)
+	if !ok {
+		return nil, fmt.Errorf("tdx transaction unexpected reply %T", got)
+	}
+	return items, nil
+}
+func (c *Client) GetHistoryTransactionData(ctx context.Context, market model.Market, code string, date int, start int, count int) ([]model.Transaction, error) {
+	got, err := c.execute(ctx, command.NewHistoryTransactionDataCommand(market, code, date, start, count))
+	if err != nil {
+		return nil, err
+	}
+	items, ok := got.([]model.Transaction)
+	if !ok {
+		return nil, fmt.Errorf("tdx history_transaction unexpected reply %T", got)
+	}
+	return items, nil
+}
+func (c *Client) GetMarketStat(ctx context.Context) (model.MarketStat, error) {
+	quotes, err := c.GetSecurityQuotes(ctx, []model.Symbol{{Market: model.MarketSH, Code: "880005"}})
+	if err != nil {
+		return model.MarketStat{}, err
+	}
+	if len(quotes) == 0 {
+		return model.MarketStat{}, fmt.Errorf("tdx market_stat empty quote response")
+	}
+	q := quotes[0]
+	up := int(q.Price.Float64())
+	down := int(q.PreClose.Float64())
+	neutral := int(q.Low.Float64())
+	total := int(q.High.Float64())
+	suspended := total - up - down - neutral
+	if suspended < 0 {
+		suspended = 0
+	}
+	return model.MarketStat{
+		UpCount: up, DownCount: down, NeutralCount: neutral, SuspendedCount: suspended,
+		TotalCount: total, TotalAmount: q.Amount, TotalVolume: q.Vol,
+	}, nil
+}
+func (c *Client) GetFundFlow(ctx context.Context, market model.Market, code string) (model.FundFlow, error) {
+	records, err := c.collectTransactionRecords(func(start int, count int) ([]model.Transaction, error) {
+		return c.GetTransactionData(ctx, market, code, start, count)
+	}, 2000, 10000)
+	if err != nil {
+		return model.FundFlow{}, err
+	}
+	return classifyFundFlow(records), nil
+}
+func (c *Client) GetHistoryFundFlow(ctx context.Context, market model.Market, code string, start int, count int) ([]model.HistoricalFundFlow, error) {
+	got, err := c.execute(ctx, command.NewHistoryFundFlowCommand(market, code, start, count))
+	if err == nil {
+		if rows, ok := got.([]model.HistoricalFundFlow); ok && len(rows) > 0 {
+			return rows, nil
+		}
+	}
+	bars, err := c.GetSecurityBars(ctx, market, code, model.KlineDay, start, count)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.HistoricalFundFlow, 0, len(bars))
+	for _, bar := range bars {
+		date := bar.Year*10000 + bar.Month*100 + bar.Day
+		records, err := c.collectTransactionRecords(func(pageStart int, pageSize int) ([]model.Transaction, error) {
+			return c.GetHistoryTransactionData(ctx, market, code, date, pageStart, pageSize)
+		}, 800, 10000)
+		if err != nil {
+			return nil, err
+		}
+		flow := classifyFundFlow(records)
+		out = append(out, model.HistoricalFundFlow{
+			Year: date / 10000, Month: (date / 100) % 100, Day: date % 100,
+			SuperIn: flow.SuperIn, SuperOut: flow.SuperOut, LargeIn: flow.LargeIn, LargeOut: flow.LargeOut,
+			MediumIn: flow.MediumIn, MediumOut: flow.MediumOut, SmallIn: flow.SmallIn, SmallOut: flow.SmallOut,
+		})
+	}
+	return out, nil
+}
+func (c *Client) GetFinanceInfo(ctx context.Context, market model.Market, code string) (model.FinanceInfo, error) {
+	got, err := c.execute(ctx, command.NewFinanceInfoCommand(market, code))
+	if err != nil {
+		return model.FinanceInfo{}, err
+	}
+	info, ok := got.(model.FinanceInfo)
+	if !ok {
+		return model.FinanceInfo{}, fmt.Errorf("tdx finance_info unexpected reply %T", got)
+	}
+	return info, nil
+}
+func (c *Client) GetXdxrInfo(ctx context.Context, market model.Market, code string) ([]model.XdxrRecord, error) {
+	got, err := c.execute(ctx, command.NewXdxrInfoCommand(market, code))
+	if err != nil {
+		return nil, err
+	}
+	rows, ok := got.([]model.XdxrRecord)
+	if !ok {
+		return nil, fmt.Errorf("tdx xdxr_info unexpected reply %T", got)
+	}
+	return rows, nil
+}
+func (c *Client) GetCompanyInfoCategory(ctx context.Context, market model.Market, code string) ([]model.CompanyInfoCategory, error) {
+	got, err := c.execute(ctx, command.NewCompanyInfoCategoryCommand(market, code))
+	if err != nil {
+		return nil, err
+	}
+	items, ok := got.([]model.CompanyInfoCategory)
+	if !ok {
+		return nil, fmt.Errorf("tdx company_info_category unexpected reply %T", got)
+	}
+	return items, nil
+}
+func (c *Client) GetCompanyInfoContent(ctx context.Context, market model.Market, code string, filename string, offset int, length int) ([]byte, error) {
+	got, err := c.execute(ctx, command.NewCompanyInfoContentCommand(market, code, filename, offset, length))
+	if err != nil {
+		return nil, err
+	}
+	content, ok := got.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("tdx company_info_content unexpected reply %T", got)
+	}
+	return content, nil
+}
+func (c *Client) GetBlockInfo(ctx context.Context, filename string) ([]model.Board, error) {
+	got, err := c.execute(ctx, command.NewBlockInfoMetaCommand(filename))
+	if err != nil {
+		return nil, err
+	}
+	meta, ok := got.(model.FileMeta)
+	if !ok {
+		return nil, fmt.Errorf("tdx block_info_meta unexpected reply %T", got)
+	}
+	data := make([]byte, 0, meta.Size)
+	for start := 0; start < meta.Size; start += DefaultFileChunkSize {
+		length := DefaultFileChunkSize
+		if remain := meta.Size - start; remain < length {
+			length = remain
+		}
+		chunkAny, err := c.execute(ctx, command.NewBlockInfoCommand(filename, start, length))
+		if err != nil {
+			return nil, err
+		}
+		chunk, ok := chunkAny.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("tdx block_info unexpected reply %T", chunkAny)
+		}
+		data = append(data, chunk...)
+		if len(chunk) < length {
+			break
+		}
+	}
+	return command.ParseBlockData(data, filename), nil
+}
+func (c *Client) GetReportFile(ctx context.Context, filename string) ([]byte, error) {
+	data := make([]byte, 0)
+	for i := 0; i < MaxFileChunks; i++ {
+		start := i * DefaultFileChunkSize
+		got, err := c.execute(ctx, command.NewReportFileCommand(filename, start, DefaultFileChunkSize))
+		if err != nil {
+			return nil, err
+		}
+		chunk, ok := got.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("tdx report_file unexpected reply %T", got)
+		}
+		data = append(data, chunk...)
+		if len(chunk) < DefaultFileChunkSize {
+			break
+		}
+	}
+	return data, nil
+}
+func (c *Client) ListBoards(ctx context.Context, boardType string) ([]model.Board, error) {
+	filename := "block_zs.dat"
+	switch boardType {
+	case "concept":
+		filename = "block_gn.dat"
+	case "style":
+		filename = "block_fg.dat"
+	case "industry", "index":
+		filename = "block_zs.dat"
+	}
+	return c.GetBlockInfo(ctx, filename)
+}
+func (c *Client) ListBoardMembers(ctx context.Context, boardCode string) ([]string, error) {
+	for _, filename := range []string{"block_gn.dat", "block_fg.dat", "block_zs.dat"} {
+		boards, err := c.GetBlockInfo(ctx, filename)
+		if err != nil {
+			continue
+		}
+		for _, board := range boards {
+			if board.Name == boardCode {
+				return board.Codes, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("tdx board %q not found", boardCode)
+}
+
+type transactionSignature struct {
+	Hour        int
+	Minute      int
+	PriceValue  int64
+	PriceScale  int32
+	Vol         int
+	BuyOrSell   int
+	UnknownLast int
+}
+
+type pageSignature struct {
+	First transactionSignature
+	Last  transactionSignature
+}
+
+func (c *Client) collectTransactionRecords(fetch func(start int, count int) ([]model.Transaction, error), pageSize int, maxStart int) ([]model.Transaction, error) {
+	out := make([]model.Transaction, 0)
+	seenRecords := make(map[transactionSignature]struct{})
+	seenPages := make(map[pageSignature]struct{})
+	for start := 0; start < maxStart; {
+		records, err := fetch(start, pageSize)
+		if err != nil {
+			return nil, err
+		}
+		if len(records) == 0 {
+			break
+		}
+		pageSig := pageSignature{First: signatureOfTransaction(records[0]), Last: signatureOfTransaction(records[len(records)-1])}
+		if _, ok := seenPages[pageSig]; ok {
+			break
+		}
+		seenPages[pageSig] = struct{}{}
+
+		newCount := 0
+		for _, record := range records {
+			sig := signatureOfTransaction(record)
+			if _, ok := seenRecords[sig]; ok {
+				continue
+			}
+			seenRecords[sig] = struct{}{}
+			out = append(out, record)
+			newCount++
+		}
+		if newCount == 0 {
+			break
+		}
+		start += len(records)
+		if len(records) < 100 {
+			break
+		}
+	}
+	return out, nil
+}
+
+func signatureOfTransaction(record model.Transaction) transactionSignature {
+	return transactionSignature{
+		Hour: record.Hour, Minute: record.Minute, PriceValue: record.Price.Mantissa, PriceScale: record.Price.Scale,
+		Vol: record.Vol, BuyOrSell: record.BuyOrSell, UnknownLast: record.UnknownLast,
+	}
+}
+
+func classifyFundFlow(records []model.Transaction) model.FundFlow {
+	var flow model.FundFlow
+	for _, record := range records {
+		amount := record.Price.Float64() * float64(record.Vol) * 100
+		if amount <= 0 {
+			continue
+		}
+		switch record.BuyOrSell {
+		case 0:
+			addFundAmount(&flow, amount, true)
+		case 1:
+			addFundAmount(&flow, amount, false)
+		}
+	}
+	return flow
+}
+
+func addFundAmount(flow *model.FundFlow, amount float64, inflow bool) {
+	switch {
+	case amount > 1_000_000:
+		if inflow {
+			flow.SuperIn += amount
+		} else {
+			flow.SuperOut += amount
+		}
+	case amount > 200_000:
+		if inflow {
+			flow.LargeIn += amount
+		} else {
+			flow.LargeOut += amount
+		}
+	case amount > 40_000:
+		if inflow {
+			flow.MediumIn += amount
+		} else {
+			flow.MediumOut += amount
+		}
+	default:
+		if inflow {
+			flow.SmallIn += amount
+		} else {
+			flow.SmallOut += amount
+		}
+	}
+}
+
+func (c *Client) execute(ctx context.Context, cmd command.Command) (any, error) {
+	var lastErr error
+	attempts := c.attempts
+	if attempts <= 0 {
+		attempts = 1
+	}
+	for attempt := 0; attempt < attempts; attempt++ {
+		idx, server := c.pickServer(cmd.Operation())
+		rt, err := c.acquire(ctx, idx, server)
+		if err != nil {
+			lastErr = err
+			c.report(idx, cmd.Operation(), err, 0)
+			continue
+		}
+		start := time.Now()
+		out, err := rt.RoundTrip(ctx, cmd)
+		if err != nil {
+			c.release(idx, rt, false)
+			lastErr = fmt.Errorf("%s via %s attempt %d: %w", cmd.Operation(), server.Addr(), attempt+1, err)
+			c.report(idx, cmd.Operation(), err, time.Since(start))
+			continue
+		}
+		c.release(idx, rt, true)
+		c.report(idx, cmd.Operation(), nil, time.Since(start))
+		return out, nil
+	}
+	if lastErr == nil {
+		lastErr = errors.New("tdx: no attempts executed")
+	}
+	return nil, lastErr
+}
+
+func (c *Client) acquire(ctx context.Context, idx int, server model.Server) (RoundTripper, error) {
+	if c.maxIdlePerHost > 0 {
+		c.mu.Lock()
+		if idx >= 0 && idx < len(c.idle) {
+			idle := c.idle[idx]
+			if n := len(idle); n > 0 {
+				rt := idle[n-1]
+				c.idle[idx] = idle[:n-1]
+				c.mu.Unlock()
+				return rt, nil
+			}
+		}
+		c.mu.Unlock()
+	}
+	return c.dialer.DialTDX(ctx, server, c.opts.Transport)
+}
+
+func (c *Client) release(idx int, rt RoundTripper, reusable bool) {
+	if rt == nil {
+		return
+	}
+	if !reusable || c.maxIdlePerHost <= 0 {
+		_ = rt.Close()
+		return
+	}
+	c.mu.Lock()
+	if idx >= 0 && idx < len(c.idle) && len(c.idle[idx]) < c.maxIdlePerHost {
+		c.idle[idx] = append(c.idle[idx], rt)
+		c.mu.Unlock()
+		return
+	}
+	c.mu.Unlock()
+	_ = rt.Close()
+}
+
+func (c *Client) drainIdle() []RoundTripper {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []RoundTripper
+	for idx := range c.idle {
+		out = append(out, c.idle[idx]...)
+		c.idle[idx] = nil
+	}
+	return out
+}
+
+func (c *Client) pickServer(op string) (int, model.Server) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.servers) == 0 {
+		c.servers = KnownServers()
+	}
+	now := time.Now()
+	c.ensureOperationLocked(op)
+	c.refreshOperationCoolingLocked(op, now)
+	firstIdx := c.next % len(c.servers)
+	for i := 0; i < len(c.servers); i++ {
+		idx := c.next % len(c.servers)
+		c.next = (idx + 1) % len(c.servers)
+		if !c.opStats[op][idx].Cooling {
+			return idx, c.servers[idx]
+		}
+	}
+	c.next = (firstIdx + 1) % len(c.servers)
+	return firstIdx, c.servers[firstIdx]
+}
+
+func (c *Client) report(idx int, op string, err error, latency time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if idx < 0 || idx >= len(c.stats) {
+		return
+	}
+	opStats := c.ensureOperationLocked(op)
+	c.stats[idx].LastOp = op
+	opStats[idx].LastOp = op
+	if err != nil {
+		c.stats[idx].Failures++
+		c.stats[idx].Score *= 0.5
+		c.stats[idx].LastError = err.Error()
+		opStats[idx].Failures++
+		opStats[idx].Score *= 0.5
+		opStats[idx].LastError = err.Error()
+		c.opFailures[op][idx]++
+		if c.opFailures[op][idx] >= c.breakerFailure {
+			opStats[idx].Cooling = true
+			c.opCoolUntil[op][idx] = time.Now().Add(c.breakerCooldown)
+		}
+		c.refreshGlobalCoolingLocked(time.Now())
+		return
+	}
+	c.stats[idx].Successes++
+	c.stats[idx].LastError = ""
+	opStats[idx].Successes++
+	opStats[idx].LastError = ""
+	opStats[idx].Cooling = false
+	c.opFailures[op][idx] = 0
+	c.opCoolUntil[op][idx] = time.Time{}
+	if c.stats[idx].Score == 0 {
+		c.stats[idx].Score = 1
+	}
+	if opStats[idx].Score == 0 {
+		opStats[idx].Score = 1
+	}
+	if latency > 0 {
+		ms := float64(latency.Milliseconds() + 1)
+		c.stats[idx].Score = 0.8*c.stats[idx].Score + 0.2*(1000/ms)
+		opStats[idx].Score = 0.8*opStats[idx].Score + 0.2*(1000/ms)
+	}
+	c.refreshGlobalCoolingLocked(time.Now())
+}
+
+func (c *Client) ensureOperationLocked(op string) []model.ServerStat {
+	if c.opStats == nil {
+		c.opStats = make(map[string][]model.ServerStat)
+	}
+	stats, ok := c.opStats[op]
+	if ok && len(stats) == len(c.servers) {
+		return stats
+	}
+	stats = make([]model.ServerStat, len(c.servers))
+	for i, server := range c.servers {
+		stats[i] = model.ServerStat{Server: server, Score: 1}
+	}
+	c.opStats[op] = stats
+	if c.opFailures == nil {
+		c.opFailures = make(map[string][]int)
+	}
+	if c.opCoolUntil == nil {
+		c.opCoolUntil = make(map[string][]time.Time)
+	}
+	c.opFailures[op] = make([]int, len(c.servers))
+	c.opCoolUntil[op] = make([]time.Time, len(c.servers))
+	return stats
+}
+
+func (c *Client) refreshOperationCoolingLocked(op string, now time.Time) {
+	stats := c.ensureOperationLocked(op)
+	coolUntil := c.opCoolUntil[op]
+	for i := range stats {
+		if stats[i].Cooling && !coolUntil[i].IsZero() && !now.Before(coolUntil[i]) {
+			stats[i].Cooling = false
+			coolUntil[i] = time.Time{}
+			c.opFailures[op][i] = 0
+		}
+	}
+}
+
+func (c *Client) refreshGlobalCoolingLocked(now time.Time) {
+	for i := range c.stats {
+		c.stats[i].Cooling = false
+	}
+	for op := range c.opStats {
+		c.refreshOperationCoolingLocked(op, now)
+		for i, stat := range c.opStats[op] {
+			if stat.Cooling && i < len(c.stats) {
+				c.stats[i].Cooling = true
+			}
+		}
+	}
+}
+
+func isAshare(market model.Market, code string) bool {
+	return (market == model.MarketSH && hasPrefix(code, "600", "601", "603", "605", "688", "689")) ||
+		(market == model.MarketSZ && hasPrefix(code, "000", "001", "002", "003", "300", "301")) ||
+		(market == model.MarketBJ && hasPrefix(code, "4", "8", "920"))
+}
+
+func isIndexLike(market model.Market, code string) bool {
+	return (market == model.MarketSH && hasPrefix(code, "000", "880", "881", "882", "883", "884", "885", "999")) ||
+		(market == model.MarketSZ && hasPrefix(code, "395", "399"))
+}
+
+func hasPrefix(s string, prefixes ...string) bool {
+	for _, prefix := range prefixes {
+		if len(s) >= len(prefix) && s[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
+}
+
+type NetDialer struct{}
+
+func (NetDialer) DialTDX(ctx context.Context, server model.Server, opts TransportOptions) (RoundTripper, error) {
+	timeout := opts.ConnectTimeout
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	d := net.Dialer{Timeout: timeout}
+	conn, err := d.DialContext(ctx, "tcp", server.Addr())
+	if err != nil {
+		return nil, err
+	}
+	rt := &tcpRoundTripper{conn: conn, opts: opts}
+	if err := rt.setup(); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return rt, nil
+}
+
+type tcpRoundTripper struct {
+	conn net.Conn
+	opts TransportOptions
+	mu   sync.Mutex
+}
+
+func (t *tcpRoundTripper) RoundTrip(ctx context.Context, cmd command.Command) (any, error) {
+	out, err := t.RoundTripRaw(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return out.Parsed, nil
+}
+
+func (t *tcpRoundTripper) RoundTripRaw(ctx context.Context, cmd command.Command) (CapturedResponse, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	req, err := cmd.BuildRequest()
+	if err != nil {
+		return CapturedResponse{}, err
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = t.conn.SetDeadline(deadline)
+	} else {
+		_ = t.conn.SetDeadline(time.Now().Add(t.opts.ReadTimeout))
+	}
+	if _, err := t.conn.Write(req); err != nil {
+		return CapturedResponse{}, err
+	}
+	payload, err := readFramePayload(t.conn)
+	if err != nil {
+		return CapturedResponse{}, err
+	}
+	parsed, err := cmd.ParseResponse(payload.Body)
+	if err != nil {
+		return CapturedResponse{}, err
+	}
+	return CapturedResponse{
+		Operation:   cmd.Operation(),
+		Request:     append([]byte(nil), req...),
+		Header:      payload.Header,
+		HeaderBytes: append([]byte(nil), payload.HeaderBytes...),
+		RawBody:     append([]byte(nil), payload.RawBody...),
+		Body:        append([]byte(nil), payload.Body...),
+		Parsed:      parsed,
+	}, nil
+}
+
+func (t *tcpRoundTripper) setup() error {
+	for _, req := range command.SetupCommands {
+		if _, err := t.conn.Write(req); err != nil {
+			return err
+		}
+		_, _ = readFrame(t.conn)
+	}
+	return nil
+}
+
+func (t *tcpRoundTripper) Close() error {
+	return t.conn.Close()
+}
+
+func readFrame(r io.Reader) ([]byte, error) {
+	payload, err := readFramePayload(r)
+	if err != nil {
+		return nil, err
+	}
+	return payload.Body, nil
+}
+
+type framePayload struct {
+	Header      frame.Header
+	HeaderBytes []byte
+	RawBody     []byte
+	Body        []byte
+}
+
+func readFramePayload(r io.Reader) (framePayload, error) {
+	headerBytes := make([]byte, frame.HeaderSize)
+	if _, err := io.ReadFull(r, headerBytes); err != nil {
+		return framePayload{}, err
+	}
+	header, err := frame.ParseHeader(headerBytes)
+	if err != nil {
+		return framePayload{}, err
+	}
+	raw := make([]byte, header.ZipSize)
+	if _, err := io.ReadFull(r, raw); err != nil {
+		return framePayload{}, err
+	}
+	body, err := frame.DecodeBody(header, raw)
+	if err != nil {
+		return framePayload{}, err
+	}
+	return framePayload{
+		Header:      header,
+		HeaderBytes: headerBytes,
+		RawBody:     raw,
+		Body:        body,
+	}, nil
+}
