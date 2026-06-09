@@ -556,7 +556,8 @@ Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
 - `go test -count=1 ./...` 和 `go vet ./...` 均通过。
 - `TDX_LIVE=1 tdx-validate -markets sh -symbols sh:600519 -skip-boards -skip-files`：12 项检查，10 OK，2 个公网超时错误，0 warnings；核心 count/list/quote/day-bar/minute/transaction/finance/xdxr/company 均通过。
 - `TDX_LIVE=1 tdx-validate -markets sh,sz -symbols sh:600519,sz:000001 -skip-boards -skip-files`：14 项检查，12 OK，2 个公网超时错误，0 warnings；multi-market quote 返回 2 行并通过 symbol 完整性校验。
-- `tdx-validate -full-security-list` 已支持全市场分页完整性校验；默认 smoke 为了速度仍只查第 0 页。最新 SH live baseline 加上 `-security-list-page-retries 1` 后拉完 27215 行，`page_5000`、`page_11000`、`page_17000`、`page_23000` 首次失败后重试成功并保留 warning。
+- `tdx-validate -full-security-list` 已支持全市场分页完整性校验；默认 smoke 为了速度仍只查第 0 页。最新 SH/SZ live baseline 加上 `-security-list-page-retries 1` 后分别拉完 27215/23411 行，若干分页首次失败后重试成功并保留 warning。
+- BJ live baseline 中 `security_count_BJ=345`，但 `security_list_BJ_page_0` 在 15s timeout、3 次 page retry 下仍超时，BJ full universe 仍需 report/base-info fallback。
 - `TDX_LIVE=1 tdx-validate` 含 boards/files：`boards_concept` 返回 270 行，`report_file_base_info.zip` 在当前公网节点返回 0 字节，仍需 fallback/节点矩阵继续反推。
 - 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `34.0 us/op`，minute parser 约 `9.1 us/op`，5000 行 universe validation 约 `244.0 us/op`，80 符号 quote 分片 client benchmark 约 `15.5 us/op`。完整输出记录在 handoff 文档。
 

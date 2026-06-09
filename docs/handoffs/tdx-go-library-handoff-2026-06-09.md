@@ -281,6 +281,8 @@ Latest live runs in this environment, on 2026-06-09 around 21:04-21:06 Asia/Shan
 - Latest page-level SH smoke with 8s page timeout showed `security_list_SH_page_0` through `security_list_SH_page_4000` OK, `security_list_SH_page_5000` timed out, and aggregate `security_list_SH_full` preserved 5000 rows.
 - Full-list validation now also has `FullSecurityListPageRetries` / CLI `-security-list-page-retries`. This retries a failed page after the client-level host failover for that page has already failed; successful retries keep a warning finding with the earlier error.
 - Latest page-retry SH smoke with `-security-list-page-retries 1` completed `security_list_SH_full` with 27215 rows in 39266 ms. Pages 5000, 11000, 17000, and 23000 had first-attempt timeout warnings and then succeeded.
+- 2026-06-10 SZ baseline completed `security_list_SZ_full` with 23411 rows in 38739 ms. Pages 5000, 11000, 17000, and 23000 had first-attempt timeout warnings and then succeeded.
+- 2026-06-10 BJ baseline returned `security_count_BJ=345`, but `security_list_BJ_page_0` still failed with 15s operation timeout and 3 page retries. Aggregate `security_list_BJ_full` remained 0/345 rows.
 - Passed across these runs: SH/SZ count and first security-list pages, single-symbol quote, multi-market quote, day bars, minute-time structural check, transaction page when public server responded, market stat, finance, XDXR, company category, and `boards_concept` with 270 rows.
 - Failed due current public-server behavior: `fund_flow_SH_600519` and `history_fund_flow_SH_600519` intermittently hit transaction/history-transaction timeout; `report_file_base_info.zip` returned 0 bytes in the files smoke.
 - Prior minute-time negative-volume warnings are gone after parsing the live real-time symbol prefix. Prior multi-market quote bad second symbol is gone after fixing quote parser offset shadowing.
@@ -328,7 +330,7 @@ BenchmarkClientGetSecurityQuotesBatchSplit 15453 ns/op 192769 B/op     169 alloc
 Remaining validation work:
 
 - Compare the captured multi-symbol/multi-market quote and minute-time fixtures with pytdx/xmtdx JSON outputs.
-- Record SZ/BJ full-list baselines with `-security-list-page-retries 1`, and tune retries/timeouts for public-server instability.
+- Implement BJ fallback collection from protocol-accessible files such as `base_info.zip` or related report/security files, then validate against `security_count_BJ=345`.
 - Add a durable performance report artifact after each major parser/client change.
 - Extend report-file fallback and node matrix checks because public `base_info.zip` can return 0 bytes.
 - Keep fund-flow/history-fund-flow in live validation, but treat public-server transaction timeouts as environment-dependent until more host-operation fixtures are collected.
