@@ -11,6 +11,7 @@ This repository does not wrap gotdx. It implements the protocol directly with:
 - Request-level host failover and operation health checks.
 - Operation-aware circuit breaker with per-operation cooldown and `OperationStats`.
 - Per-host idle connection pool; successful connections are reused and failed connections are discarded.
+- Request observer hooks and a built-in metrics collector for operation/host latency, failures, retries, and row counts.
 - Heartbeat manager for long-lived transports.
 - Raw byte preservation for protocol auditing.
 
@@ -32,6 +33,13 @@ client := tdx.NewClient(tdx.Options{
     },
 })
 stats := client.OperationStats("security_list")
+```
+
+```go
+metrics := tdx.NewMetricsCollector()
+client := tdx.NewClient(tdx.Options{Observer: metrics})
+_ = client.Ping(context.Background())
+snapshots := metrics.Snapshot()
 ```
 
 ## Diagnostics

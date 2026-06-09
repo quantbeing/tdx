@@ -22,6 +22,7 @@ type Options struct {
 	Transport      TransportOptions
 	CircuitBreaker CircuitBreakerOptions
 	Pool           PoolOptions
+	Observer       Observer
 }
 
 type TransportOptions struct {
@@ -292,10 +293,11 @@ func (c *Client) Capture(ctx context.Context, cmd command.Command) (CapturedResp
 	}
 	for attempt := 0; attempt < attempts; attempt++ {
 		idx, server := c.pickServer(cmd.Operation())
-		rt, err := c.acquire(ctx, idx, server)
+		rt, reused, err := c.acquire(ctx, idx, server)
 		if err != nil {
 			lastErr = err
 			c.report(idx, cmd.Operation(), err, 0)
+			c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: false, Error: err.Error()})
 			continue
 		}
 		rawRT, ok := rt.(RawRoundTripper)
@@ -304,6 +306,7 @@ func (c *Client) Capture(ctx context.Context, cmd command.Command) (CapturedResp
 			err := fmt.Errorf("tdx round tripper for %s does not support capture", server.Addr())
 			lastErr = err
 			c.report(idx, cmd.Operation(), err, 0)
+			c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: false, Error: err.Error(), Reused: reused})
 			continue
 		}
 		start := time.Now()
@@ -313,6 +316,7 @@ func (c *Client) Capture(ctx context.Context, cmd command.Command) (CapturedResp
 			c.release(idx, rt, false)
 			lastErr = fmt.Errorf("%s capture via %s attempt %d: %w", cmd.Operation(), server.Addr(), attempt+1, err)
 			c.report(idx, cmd.Operation(), err, latency)
+			c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: false, Error: err.Error(), Latency: latency, Reused: reused})
 			continue
 		}
 		c.release(idx, rt, true)
@@ -321,6 +325,7 @@ func (c *Client) Capture(ctx context.Context, cmd command.Command) (CapturedResp
 		out.Attempt = attempt + 1
 		out.Latency = latency
 		c.report(idx, cmd.Operation(), nil, latency)
+		c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: true, Latency: latency, Rows: rowCount(out.Parsed), BodySize: len(out.Body), Reused: reused})
 		return out, nil
 	}
 	if lastErr == nil {
@@ -794,22 +799,27 @@ func (c *Client) execute(ctx context.Context, cmd command.Command) (any, error) 
 	}
 	for attempt := 0; attempt < attempts; attempt++ {
 		idx, server := c.pickServer(cmd.Operation())
-		rt, err := c.acquire(ctx, idx, server)
+		rt, reused, err := c.acquire(ctx, idx, server)
 		if err != nil {
 			lastErr = err
 			c.report(idx, cmd.Operation(), err, 0)
+			c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: false, Error: err.Error()})
 			continue
 		}
 		start := time.Now()
 		out, err := rt.RoundTrip(ctx, cmd)
 		if err != nil {
+			latency := time.Since(start)
 			c.release(idx, rt, false)
 			lastErr = fmt.Errorf("%s via %s attempt %d: %w", cmd.Operation(), server.Addr(), attempt+1, err)
-			c.report(idx, cmd.Operation(), err, time.Since(start))
+			c.report(idx, cmd.Operation(), err, latency)
+			c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: false, Error: err.Error(), Latency: latency, Reused: reused})
 			continue
 		}
 		c.release(idx, rt, true)
-		c.report(idx, cmd.Operation(), nil, time.Since(start))
+		latency := time.Since(start)
+		c.report(idx, cmd.Operation(), nil, latency)
+		c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: true, Latency: latency, Rows: rowCount(out), Reused: reused})
 		return out, nil
 	}
 	if lastErr == nil {
@@ -818,7 +828,7 @@ func (c *Client) execute(ctx context.Context, cmd command.Command) (any, error) 
 	return nil, lastErr
 }
 
-func (c *Client) acquire(ctx context.Context, idx int, server model.Server) (RoundTripper, error) {
+func (c *Client) acquire(ctx context.Context, idx int, server model.Server) (RoundTripper, bool, error) {
 	if c.maxIdlePerHost > 0 {
 		c.mu.Lock()
 		if idx >= 0 && idx < len(c.idle) {
@@ -827,12 +837,19 @@ func (c *Client) acquire(ctx context.Context, idx int, server model.Server) (Rou
 				rt := idle[n-1]
 				c.idle[idx] = idle[:n-1]
 				c.mu.Unlock()
-				return rt, nil
+				return rt, true, nil
 			}
 		}
 		c.mu.Unlock()
 	}
-	return c.dialer.DialTDX(ctx, server, c.opts.Transport)
+	rt, err := c.dialer.DialTDX(ctx, server, c.opts.Transport)
+	return rt, false, err
+}
+
+func (c *Client) observe(event RequestEvent) {
+	if c.opts.Observer != nil {
+		c.opts.Observer.OnRequest(event)
+	}
 }
 
 func (c *Client) release(idx int, rt RoundTripper, reusable bool) {

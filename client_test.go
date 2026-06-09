@@ -40,6 +40,75 @@ func (r *closeAwareRoundTripper) Close() error {
 	return nil
 }
 
+func TestClientObserverReceivesAttemptEvents(t *testing.T) {
+	var events []RequestEvent
+	client := NewClient(Options{
+		Servers:     []model.Server{{Name: "bad", Host: "bad", Port: 7709}, {Name: "good", Host: "good", Port: 7709}},
+		MaxAttempts: 2,
+		Pool:        PoolOptions{Disable: true},
+		Observer: ObserverFunc(func(event RequestEvent) {
+			events = append(events, event)
+		}),
+		Dialer: DialerFunc(func(_ context.Context, server model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				if server.Name == "bad" {
+					return nil, errors.New("read timeout")
+				}
+				return []model.Security{{Market: model.MarketSH, Code: "600519"}, {Market: model.MarketSH, Code: "600000"}}, nil
+			}), nil
+		}),
+	})
+
+	items, err := client.GetSecurityList(context.Background(), model.MarketSH, 0)
+	if err != nil {
+		t.Fatalf("GetSecurityList: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("len = %d", len(items))
+	}
+	if len(events) != 2 {
+		t.Fatalf("events = %+v", events)
+	}
+	if events[0].Operation != "security_list" || events[0].Server.Name != "bad" || events[0].Attempt != 1 || events[0].OK || events[0].Error == "" {
+		t.Fatalf("first event = %+v", events[0])
+	}
+	if events[1].Operation != "security_list" || events[1].Server.Name != "good" || events[1].Attempt != 2 || !events[1].OK || events[1].Rows != 2 || events[1].Error != "" {
+		t.Fatalf("second event = %+v", events[1])
+	}
+}
+
+func TestMetricsCollectorAggregatesRequestEvents(t *testing.T) {
+	metrics := NewMetricsCollector()
+	client := NewClient(Options{
+		Servers:  []model.Server{{Name: "good", Host: "good", Port: 7709}},
+		Pool:     PoolOptions{Disable: true},
+		Observer: metrics,
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				return []model.Security{{Market: model.MarketSH, Code: "600519"}, {Market: model.MarketSH, Code: "600000"}}, nil
+			}), nil
+		}),
+	})
+
+	for i := 0; i < 2; i++ {
+		if _, err := client.GetSecurityList(context.Background(), model.MarketSH, 0); err != nil {
+			t.Fatalf("GetSecurityList[%d]: %v", i, err)
+		}
+	}
+
+	snapshots := metrics.Snapshot()
+	if len(snapshots) != 1 {
+		t.Fatalf("snapshots = %+v", snapshots)
+	}
+	got := snapshots[0]
+	if got.Operation != "security_list" || got.Server.Name != "good" || got.Attempts != 2 || got.Successes != 2 || got.Failures != 0 || got.TotalRows != 4 {
+		t.Fatalf("snapshot = %+v", got)
+	}
+	if got.LastLatency <= 0 || got.MaxLatency <= 0 {
+		t.Fatalf("latency snapshot = %+v", got)
+	}
+}
+
 func TestClientReusesSuccessfulConnectionFromPool(t *testing.T) {
 	var dials int32
 	var closes int32
