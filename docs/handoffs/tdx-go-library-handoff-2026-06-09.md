@@ -271,14 +271,26 @@ TDX_LIVE=1 go run ./cmd/tdx-validate \
   -pretty
 ```
 
-Latest live run in this environment, on 2026-06-09 around 20:41 Asia/Shanghai:
+Latest live runs in this environment, on 2026-06-09 around 21:04-21:06 Asia/Shanghai:
 
-- Scope: SH only, symbol `600519`, day K-line, boards/report files skipped.
-- Result: 12 operation checks, 10 OK, 2 failed, 2 errors, 167 warnings.
-- Passed: SH count, SH first security-list page, single-symbol quote, day bars, minute-time structural check, transaction page, market stat, finance, XDXR, company category.
-- Failed: `fund_flow_SH_600519` and `history_fund_flow_SH_600519`, both due transaction/history-transaction timeout on public servers.
-- Warnings: minute-time volume can decode negative for many rows. This is no longer treated as fatal; it needs raw fixture comparison against pytdx/xmtdx before deciding whether the field is signed, a delta, or parser semantics are incomplete.
-- Multi-market quote validation with `sh:600519,sz:000001` produced a bad second symbol once; this needs raw fixture capture before changing the quote parser.
+- SH core smoke, symbol `600519`, day K-line, boards/report files skipped: 12 operation checks, 10 OK, 2 failed, 2 errors, 0 warnings, 28578 rows.
+- SH/SZ quote smoke, symbols `sh:600519,sz:000001`, day K-line, boards/report files skipped: 14 operation checks, 12 OK, 2 failed, 2 errors, 0 warnings, 52941 rows.
+- Boards/files smoke, SH symbol `600519`: 14 operation checks, 11 OK, 3 failed, 3 errors, 0 warnings, 28848 rows.
+- Passed across these runs: SH/SZ count and first security-list pages, single-symbol quote, multi-market quote, day bars, minute-time structural check, transaction page when public server responded, market stat, finance, XDXR, company category, and `boards_concept` with 270 rows.
+- Failed due current public-server behavior: `fund_flow_SH_600519` and `history_fund_flow_SH_600519` intermittently hit transaction/history-transaction timeout; `report_file_base_info.zip` returned 0 bytes in the files smoke.
+- Prior minute-time negative-volume warnings are gone after parsing the live real-time symbol prefix. Prior multi-market quote bad second symbol is gone after fixing quote parser offset shadowing.
+
+Live fixtures captured for the parser fixes:
+
+```text
+fixtures/live/2026-06-09-validation-followup/security_quotes_180_153_18_170_7709_20260609T125505.372328000Z.fixture.json
+fixtures/live/2026-06-09-validation-followup/minute_time_180_153_18_170_7709_20260609T125517.607682000Z.fixture.json
+```
+
+Root causes fixed:
+
+- `security_quotes`: the parser shadowed `pos` inside one record while decoding varint price/volume fields. The first row parsed correctly, but the next loop resumed from a stale offset and corrupted the second market/code. Regression: `TestSecurityQuotesParserKeepsOffsetAcrossRecords`.
+- `minute_time`: live real-time responses can include a 65-byte symbol/quote-like prefix after the count header. The parser previously started rows at offset 4, producing nonsense prices/volumes. Regression: `TestMinuteTimeParserSkipsLiveSymbolPrefix`.
 
 Performance benchmarks now exist for codec, frame decode, core command parsers, validation rules, and client quote batch splitting. Run them with:
 
@@ -289,31 +301,31 @@ go test -run=^$ -bench=. -benchmem ./codec ./frame ./command ./validation .
 Latest benchmark run on Apple M2 / darwin arm64:
 
 ```text
-BenchmarkGetPrice                         3.280 ns/op      0 B/op       0 allocs/op
-BenchmarkPutPrice                        18.89 ns/op       8 B/op       1 allocs/op
-BenchmarkGetVolume                       10.50 ns/op       0 B/op       0 allocs/op
-BenchmarkGetDateTimeMinute                2.828 ns/op      0 B/op       0 allocs/op
-BenchmarkGetDateTimeDay                   2.951 ns/op      0 B/op       0 allocs/op
-BenchmarkDecodeBodyRaw                    3.734 ns/op      0 B/op       0 allocs/op
-BenchmarkDecodeBodyZlib                3184 ns/op      42790 B/op      11 allocs/op
-BenchmarkParseSecurityList            169218 ns/op    434143 B/op    6002 allocs/op
-BenchmarkParseSecurityBars              45385 ns/op    166682 B/op     802 allocs/op
-BenchmarkParseIndexBars                 48405 ns/op    173082 B/op     802 allocs/op
-BenchmarkParseSecurityQuotes            26783 ns/op     57492 B/op     277 allocs/op
-BenchmarkParseMinuteTime                 6078 ns/op     20376 B/op     242 allocs/op
-BenchmarkParseTransactions              25994 ns/op     86553 B/op     802 allocs/op
-BenchmarkValidateSecurities              2180 ns/op         0 B/op       0 allocs/op
-BenchmarkValidateQuotes                  8930 ns/op     11472 B/op     166 allocs/op
-BenchmarkClientGetSecurityQuotesBatchSplit 15308 ns/op 192769 B/op     169 allocs/op
+BenchmarkGetPrice                         3.195 ns/op      0 B/op       0 allocs/op
+BenchmarkPutPrice                        17.64 ns/op       8 B/op       1 allocs/op
+BenchmarkGetVolume                       11.77 ns/op       0 B/op       0 allocs/op
+BenchmarkGetDateTimeMinute                3.544 ns/op      0 B/op       0 allocs/op
+BenchmarkGetDateTimeDay                   2.969 ns/op      0 B/op       0 allocs/op
+BenchmarkDecodeBodyRaw                    3.964 ns/op      0 B/op       0 allocs/op
+BenchmarkDecodeBodyZlib                5984 ns/op      42791 B/op      11 allocs/op
+BenchmarkParseSecurityList            180168 ns/op    434143 B/op    6002 allocs/op
+BenchmarkParseSecurityBars              47794 ns/op    166683 B/op     802 allocs/op
+BenchmarkParseIndexBars                 50068 ns/op    173082 B/op     802 allocs/op
+BenchmarkParseSecurityQuotes            25743 ns/op     57517 B/op     242 allocs/op
+BenchmarkParseMinuteTime                 7318 ns/op     20376 B/op     242 allocs/op
+BenchmarkParseTransactions              31016 ns/op     86553 B/op     802 allocs/op
+BenchmarkValidateSecurities              2291 ns/op         0 B/op       0 allocs/op
+BenchmarkValidateQuotes                 10135 ns/op     11472 B/op     166 allocs/op
+BenchmarkClientGetSecurityQuotesBatchSplit 16332 ns/op 192770 B/op     169 allocs/op
 ```
 
 Remaining validation work:
 
-- Capture raw fixtures for multi-symbol/multi-market quote responses and compare with pytdx/xmtdx.
-- Capture raw fixtures for minute-time data and decide final semantics for negative volume values.
+- Compare the captured multi-symbol/multi-market quote and minute-time fixtures with pytdx/xmtdx JSON outputs.
 - Add all-market pagination integrity checks for `ListSecurities`, not only page 0.
 - Add a durable performance report artifact after each major parser/client change.
-- Extend live validation to board/report files once public-server file behavior is better characterized.
+- Extend report-file fallback and node matrix checks because public `base_info.zip` can return 0 bytes.
+- Keep fund-flow/history-fund-flow in live validation, but treat public-server transaction timeouts as environment-dependent until more host-operation fixtures are collected.
 
 ## Known Limits
 

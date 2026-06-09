@@ -398,8 +398,10 @@ go run ./cmd/tdx-health -hosts 180.153.18.170:7709,180.153.18.171:7709 -timeout 
 
 ```bash
 go run ./cmd/tdx-probe -op security-count -market sh
-go run ./cmd/tdx-probe -op quote -capture-dir ./fixtures/live
-go run ./cmd/tdx-probe -op history-fund-flow -capture-dir ./fixtures/live
+go run ./cmd/tdx-probe -op quote -symbols sh:600519,sz:000001 -capture-dir ./fixtures/live
+go run ./cmd/tdx-probe -op minute -market sh -code 600519 -capture-dir ./fixtures/live
+go run ./cmd/tdx-probe -op history-transaction -market sh -code 600519 -date 20240607 -count 50 -capture-dir ./fixtures/live
+go run ./cmd/tdx-probe -op report -file base_info.zip -count 30000 -capture-dir ./fixtures/live
 ```
 
 支持的 `-op`：
@@ -412,7 +414,9 @@ index-bars
 quote
 market-stat
 minute
+history-minute
 transaction
+history-transaction
 fund-flow
 history-fund-flow
 finance
@@ -422,6 +426,17 @@ block-meta
 block
 report
 ```
+
+常用参数：
+
+| Flag | 用途 |
+|---|---|
+| `-market sh|sz|bj` | 单市场 command 的市场。 |
+| `-code 600519` | K 线、分时、逐笔、财务、除权、公司信息等 symbol command 的证券代码。 |
+| `-symbols sh:600519,sz:000001` | quote 多 symbol/multi-market 探测，会按原始返回保存 fixture。 |
+| `-date 20240607` | 历史分时、历史逐笔等历史 command 的交易日。 |
+| `-start 0` / `-count 50` | 分页或 chunk command 的起点和数量。 |
+| `-file base_info.zip` | 板块、报表文件 command 的文件名。 |
 
 ### Live Fixture Matrix
 
@@ -532,6 +547,14 @@ TDX_LIVE=1 go run ./cmd/tdx-validate -markets sh -symbols sh:600519 -kline day -
 ```
 
 Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
+
+2026-06-09 最新验证快照：
+
+- `go test -count=1 ./...` 和 `go vet ./...` 均通过。
+- `TDX_LIVE=1 tdx-validate -markets sh -symbols sh:600519 -skip-boards -skip-files`：12 项检查，10 OK，2 个公网超时错误，0 warnings；核心 count/list/quote/day-bar/minute/transaction/finance/xdxr/company 均通过。
+- `TDX_LIVE=1 tdx-validate -markets sh,sz -symbols sh:600519,sz:000001 -skip-boards -skip-files`：14 项检查，12 OK，2 个公网超时错误，0 warnings；multi-market quote 返回 2 行并通过 symbol 完整性校验。
+- `TDX_LIVE=1 tdx-validate` 含 boards/files：`boards_concept` 返回 270 行，`report_file_base_info.zip` 在当前公网节点返回 0 字节，仍需 fallback/节点矩阵继续反推。
+- 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `25.7 us/op`，minute parser 约 `7.3 us/op`，80 符号 quote 分片 client benchmark 约 `16.3 us/op`。完整输出记录在 handoff 文档。
 
 ## Known Limits
 
