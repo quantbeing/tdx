@@ -253,6 +253,22 @@ To github-quantbeing:quantbeing/tdx.git
 
 Live TDX smoke tests are not part of default verification. They should be run explicitly with current network conditions.
 
+## Data Integrity And Performance Test Status
+
+Data integrity has not yet been fully accepted against live TDX market data. Current tests prove offline parser behavior, codec behavior, command request construction, fake-server failure handling, fixture writing, JSON comparison tooling, and client failover behavior. They do not yet prove that every public API returns complete and field-accurate live data across SH/SZ/BJ, all K-line periods, quote batches, minute data, transactions, finance, XDXR, company files, block files, and report files.
+
+Performance testing has not yet been implemented as real Go benchmarks. A check with `go test -run=^$ -bench=. ./...` currently finds no benchmark functions, so there are no measured throughput, latency, allocation, quote-batch, pagination, or connection-pool performance baselines yet.
+
+The next validation milestone should add:
+
+- live fixture matrix capture for every implemented operation
+- pytdx/xmtdx JSON comparison on the same symbols, dates, and markets
+- field-level completeness checks for parsed records versus raw body length/count
+- all-market pagination integrity checks for `ListSecurities`
+- batch quote integrity checks across protocol chunk boundaries
+- benchmark tests for codecs, parsers, quote batch splitting, full security-list pagination, and connection-pool/failover behavior
+- an explicit performance report with p50/p95/p99 latency, rows/sec, allocations, retry count, and host-operation failure matrix
+
 ## Known Limits
 
 - Current library covers HQ `7709` core market data, not every TDX protocol family.
