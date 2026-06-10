@@ -72,6 +72,7 @@ const MaxFileChunks = 256
 var (
 	errChunkBudgetExceeded = errors.New("tdx chunk budget exceeded")
 	errPageBudgetExceeded  = errors.New("tdx page budget exceeded")
+	errPartialResult       = errors.New("tdx partial result")
 )
 
 // IsChunkBudgetError reports whether err was caused by a chunk budget limit.
@@ -84,9 +85,14 @@ func IsPageBudgetError(err error) bool {
 	return errors.Is(err, errPageBudgetExceeded)
 }
 
-// IsBudgetError reports whether err was caused by any explicit caller budget.
+// IsBudgetError reports whether err was caused by a file chunk or transaction page budget.
 func IsBudgetError(err error) bool {
 	return IsChunkBudgetError(err) || IsPageBudgetError(err)
+}
+
+// IsPartialResultError reports whether err accompanies a typed partial result.
+func IsPartialResultError(err error) bool {
+	return errors.Is(err, errPartialResult)
 }
 
 type ListSecuritiesOptions struct {
@@ -568,7 +574,7 @@ func (c *Client) ListSecuritiesWithOptions(ctx context.Context, opts ListSecurit
 					Err:       fmt.Sprintf("max pages per market reached: %d", opts.MaxPagesPerMarket),
 				})
 				if opts.StopOnError {
-					return result, fmt.Errorf("tdx list securities partial failures: %d", len(result.Failures))
+					return result, partialResultError(len(result.Failures))
 				}
 				break
 			}
@@ -576,7 +582,7 @@ func (c *Client) ListSecuritiesWithOptions(ctx context.Context, opts ListSecurit
 			if err != nil {
 				result.Failures = append(result.Failures, model.OperationError{Operation: "security_list", Market: market, Start: start, Count: 1000, Err: err.Error()})
 				if opts.StopOnError {
-					return result, fmt.Errorf("tdx list securities partial failures: %d", len(result.Failures))
+					return result, partialResultError(len(result.Failures))
 				}
 				break
 			}
@@ -591,7 +597,7 @@ func (c *Client) ListSecuritiesWithOptions(ctx context.Context, opts ListSecurit
 		}
 	}
 	if len(result.Failures) > 0 {
-		return result, fmt.Errorf("tdx list securities partial failures: %d", len(result.Failures))
+		return result, partialResultError(len(result.Failures))
 	}
 	return result, nil
 }
@@ -1043,6 +1049,10 @@ func normalizeFundFlowOptions(opts FundFlowOptions, defaultPageSize int) FundFlo
 		opts.MaxStart = 10000
 	}
 	return opts
+}
+
+func partialResultError(failures int) error {
+	return fmt.Errorf("%w: list securities partial failures=%d", errPartialResult, failures)
 }
 
 func signatureOfTransaction(record model.Transaction) transactionSignature {

@@ -538,6 +538,9 @@ func TestClientListSecuritiesWithOptionsStopsAtPageBudget(t *testing.T) {
 	if err == nil {
 		t.Fatal("ListSecuritiesWithOptions unexpectedly succeeded")
 	}
+	if !IsPartialResultError(err) {
+		t.Fatalf("err = %v, want partial result error", err)
+	}
 	if len(got.Items) != 1000 || len(got.Failures) != 1 || got.Failures[0].Operation != "security_list_budget" {
 		t.Fatalf("partial = %+v err=%v", got, err)
 	}
@@ -569,6 +572,9 @@ func TestClientListSecuritiesWithOptionsCanStopOnError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("ListSecuritiesWithOptions unexpectedly succeeded")
+	}
+	if !IsPartialResultError(err) {
+		t.Fatalf("err = %v, want partial result error", err)
 	}
 	if len(got.Failures) != 1 || len(markets) != 1 || markets[0] != model.MarketSH {
 		t.Fatalf("failures=%+v markets=%v", got.Failures, markets)

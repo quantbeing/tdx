@@ -150,6 +150,7 @@ Current public API includes:
   - `Capture()`
   - `IsBudgetError()`
   - `IsChunkBudgetError()`
+  - `IsPartialResultError()`
   - `IsPageBudgetError()`
 - Securities:
   - `GetSecurityCount()`
@@ -202,6 +203,7 @@ Current public API includes:
 - Implemented `TimeoutPolicy`, `OperationMarket`, and `FastTimeoutPolicy()` for per-operation/per-market fail-fast deadlines.
 - Implemented parent-context cancellation checks between composed API batches/pages/chunks for quotes, security lists, fund-flow aggregation, report/block files, and board-member scans.
 - Implemented page-budget controls for `ListSecuritiesWithOptions` / `ListASharesWithOptions`; budget truncation is reported as `security_list_budget` partial failure.
+- Implemented `IsPartialResultError()` so callers can distinguish readable partial results from hard failures without string matching.
 - Implemented explicit pagination/chunk budgets for fund-flow and server-file helpers:
   - `GetFundFlowWithOptions()` / `GetHistoryFundFlowWithOptions()` return a `page budget` error when transaction aggregation exceeds caller budget.
   - `GetBlockInfoWithOptions()` / `GetReportFileWithOptions()` / `ListBoardsWithOptions()` / `ListBoardMembersWithOptions()` return a `chunk budget` error instead of silent truncation.

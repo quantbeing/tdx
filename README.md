@@ -186,8 +186,10 @@ count, err := client.GetSecurityCount(ctx, model.MarketSH)
 page, err := client.GetSecurityList(ctx, model.MarketSH, 0)
 
 all, err := client.ListSecurities(ctx, model.MarketSH, model.MarketSZ, model.MarketBJ)
-if err != nil {
+if tdx.IsPartialResultError(err) {
     // all.Failures 会保留 partial failure 信息。
+} else if err != nil {
+    // context canceled/deadline 或其他硬错误。
 }
 
 sample, err := client.ListSecuritiesWithOptions(ctx, tdx.ListSecuritiesOptions{
@@ -207,6 +209,7 @@ markets := client.ListMarkets(ctx)
 
 `ListSecurities` 会分页拉取，遇到部分市场失败时返回 typed partial result，不会静默丢失败信息。
 `ListSecuritiesWithOptions` / `ListASharesWithOptions` 可给全市场列表增加页数预算；达到 `MaxPagesPerMarket` 会返回 partial failure，而不是静默截断。
+业务侧可用 `tdx.IsPartialResultError(err)` 区分“结果可读但不完整”和真正的硬失败，然后根据 `result.Failures` 决定是否重试某个 market/page。
 
 ### K Lines
 
