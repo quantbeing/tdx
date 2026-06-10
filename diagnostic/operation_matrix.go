@@ -208,7 +208,7 @@ func (c *operationMatrixAttemptCollector) attempts() []OperationMatrixAttempt {
 func summarizeOperationMatrix(results []OperationMatrixResult) []OperationMatrixSummary {
 	byKey := make(map[string]*OperationMatrixSummary)
 	for _, result := range results {
-		key := result.Operation + "\x00" + result.Server.Addr()
+		key := result.Name + "\x00" + result.Operation + "\x00" + result.Server.Addr()
 		summary, ok := byKey[key]
 		if !ok {
 			summary = &OperationMatrixSummary{
@@ -247,6 +247,9 @@ func summarizeOperationMatrix(results []OperationMatrixResult) []OperationMatrix
 		out = append(out, *summary)
 	}
 	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
 		if out[i].Operation != out[j].Operation {
 			return out[i].Operation < out[j].Operation
 		}

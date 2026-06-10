@@ -95,6 +95,29 @@ func TestRunOperationMatrixAggregatesByOperationAndHost(t *testing.T) {
 	}
 }
 
+func TestRunOperationMatrixKeepsNamedVariantsSeparate(t *testing.T) {
+	server := model.Server{Name: "good", Host: "127.0.0.1", Port: 7709}
+	report := RunOperationMatrix(context.Background(), OperationMatrixOptions{
+		Servers: []model.Server{server},
+		Operations: []MatrixOperation{
+			{Name: "security-list-sh", Command: command.NewSecurityListCommand(model.MarketSH, 0)},
+			{Name: "security-list-bj", Command: command.NewSecurityListCommand(model.MarketBJ, 0)},
+		},
+		Repeats:             1,
+		PerOperationTimeout: time.Second,
+		NewClient: func(server model.Server, observer tdx.Observer) OperationMatrixClient {
+			return &fakeMatrixClient{server: server, observer: observer}
+		},
+	})
+
+	if len(report.Summary) != 2 {
+		t.Fatalf("summary = %+v", report.Summary)
+	}
+	if report.Summary[0].Name != "security-list-bj" || report.Summary[1].Name != "security-list-sh" {
+		t.Fatalf("summary names = %+v", report.Summary)
+	}
+}
+
 func TestRunOperationMatrixRecordsClientFactoryError(t *testing.T) {
 	report := RunOperationMatrix(context.Background(), OperationMatrixOptions{
 		Servers:             []model.Server{{Name: "bad", Host: "127.0.0.2", Port: 7709}},
