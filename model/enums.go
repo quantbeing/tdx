@@ -23,7 +23,11 @@ func (m Market) String() string {
 
 type KlineCategory uint16
 
+// KlineCategory constants are declared by duration order.
+// Their numeric values are TDX wire categories and must not be renumbered.
 const (
+	KlineMinute1  KlineCategory = 7
+	KlineMinute3  KlineCategory = 8
 	KlineMinute5  KlineCategory = 0
 	KlineMinute15 KlineCategory = 1
 	KlineMinute30 KlineCategory = 2
@@ -31,9 +35,7 @@ const (
 	KlineDay      KlineCategory = 4
 	KlineWeek     KlineCategory = 5
 	KlineMonth    KlineCategory = 6
-	KlineMinute1  KlineCategory = 7
-	KlineMinute3  KlineCategory = 8
-	KlineYear     KlineCategory = 9
 	KlineSeason   KlineCategory = 10
+	KlineYear     KlineCategory = 9
 	KlineYearAlt  KlineCategory = 11
 )

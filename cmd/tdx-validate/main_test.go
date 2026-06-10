@@ -95,6 +95,32 @@ func TestBuildClientOptionsUsesShortTransportTimeouts(t *testing.T) {
 	}
 }
 
+func TestAllKlineCategoriesUsesDurationOrder(t *testing.T) {
+	got := allKlineCategories()
+	want := []model.KlineCategory{
+		model.KlineMinute1,
+		model.KlineMinute3,
+		model.KlineMinute5,
+		model.KlineMinute15,
+		model.KlineMinute30,
+		model.KlineMinute60,
+		model.KlineDay,
+		model.KlineWeek,
+		model.KlineMonth,
+		model.KlineSeason,
+		model.KlineYear,
+		model.KlineYearAlt,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("category[%d] = %d, want %d", i, got[i], want[i])
+		}
+	}
+}
+
 type fakeValidateClient struct{}
 
 type fakeValidateRetryClient struct {

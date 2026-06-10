@@ -76,11 +76,9 @@ This does not yet mean "all TDX data". The current library covers the HQ `7709` 
 - Quote batch size is capped at `command.MaxQuoteBatch = 80`.
 - File chunk size is `DefaultFileChunkSize = 30000`; report file fetch is capped by `MaxFileChunks = 256`.
 - Prices exposed in core market models use `model.Decimal` to avoid float price pollution.
-- K-line wire categories were corrected on 2026-06-09 to match xmtdx/TDX values:
-  - `5m=0`, `15m=1`, `30m=2`, `60m=3`
-  - `day=4`, `week=5`, `month=6`
-  - `1m=7`, `3m=8`
-  - `year=9`, `season=10`, `year_alt=11`
+- K-line constants are declared/documented by duration order, but their numeric values must keep TDX wire categories:
+  - `1m=7`, `3m=8`, `5m=0`, `15m=1`, `30m=2`, `60m=3`
+  - `day=4`, `week=5`, `month=6`, `season=10`, `year=9`, `year_alt=11`
 
 ## Completed Work
 

@@ -146,7 +146,10 @@ model.KlineWeek
 model.KlineMonth
 model.KlineSeason
 model.KlineYear
+model.KlineYearAlt
 ```
+
+这些常量按时间粒度从小到大展示；内部数值保持 TDX TCP 协议 wire category，不按粒度递增。
 
 证券标识：
 

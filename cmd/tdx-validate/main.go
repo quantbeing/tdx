@@ -207,6 +207,10 @@ func parseMarket(raw string) (model.Market, error) {
 
 func parseKlineCategory(raw string) (model.KlineCategory, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1m", "min1", "minute1":
+		return model.KlineMinute1, nil
+	case "3m", "min3", "minute3":
+		return model.KlineMinute3, nil
 	case "5m", "min5", "minute5":
 		return model.KlineMinute5, nil
 	case "15m", "min15", "minute15":
@@ -221,14 +225,10 @@ func parseKlineCategory(raw string) (model.KlineCategory, error) {
 		return model.KlineWeek, nil
 	case "month", "m":
 		return model.KlineMonth, nil
-	case "1m", "min1", "minute1":
-		return model.KlineMinute1, nil
-	case "3m", "min3", "minute3":
-		return model.KlineMinute3, nil
-	case "year", "y":
-		return model.KlineYear, nil
 	case "season", "quarter", "q":
 		return model.KlineSeason, nil
+	case "year", "y":
+		return model.KlineYear, nil
 	case "year-alt", "year_alt":
 		return model.KlineYearAlt, nil
 	default:
@@ -238,6 +238,8 @@ func parseKlineCategory(raw string) (model.KlineCategory, error) {
 
 func allKlineCategories() []model.KlineCategory {
 	return []model.KlineCategory{
+		model.KlineMinute1,
+		model.KlineMinute3,
 		model.KlineMinute5,
 		model.KlineMinute15,
 		model.KlineMinute30,
@@ -245,10 +247,8 @@ func allKlineCategories() []model.KlineCategory {
 		model.KlineDay,
 		model.KlineWeek,
 		model.KlineMonth,
-		model.KlineMinute1,
-		model.KlineMinute3,
-		model.KlineYear,
 		model.KlineSeason,
+		model.KlineYear,
 		model.KlineYearAlt,
 	}
 }

@@ -129,10 +129,12 @@ Known behavior:
 | `GetSecurityBars(ctx, market, code, category, start, count)` | `command.NewSecurityBarsCommand(...)` | `security_bars` | Generic bars request with command category `0x052d`, market, code, kline category, start, count. |
 | `GetIndexBars(ctx, market, code, category, start, count)` | `command.NewIndexBarsCommand(...)` | `index_bars` | Same wire format as stock bars, parser additionally reads index breadth fields. |
 
-K-line categories:
+K-line categories are listed from smallest duration to largest. The numeric value is the TDX wire category and intentionally does not follow duration order.
 
 | Category | Value |
 |---|---:|
+| `KlineMinute1` | 7 |
+| `KlineMinute3` | 8 |
 | `KlineMinute5` | 0 |
 | `KlineMinute15` | 1 |
 | `KlineMinute30` | 2 |
@@ -140,10 +142,8 @@ K-line categories:
 | `KlineDay` | 4 |
 | `KlineWeek` | 5 |
 | `KlineMonth` | 6 |
-| `KlineMinute1` | 7 |
-| `KlineMinute3` | 8 |
-| `KlineYear` | 9 |
 | `KlineSeason` | 10 |
+| `KlineYear` | 9 |
 | `KlineYearAlt` | 11 |
 
 Response parser:
