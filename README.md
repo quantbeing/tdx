@@ -190,6 +190,12 @@ if err != nil {
     // all.Failures 会保留 partial failure 信息。
 }
 
+sample, err := client.ListSecuritiesWithOptions(ctx, tdx.ListSecuritiesOptions{
+    Markets:           []model.Market{model.MarketSH, model.MarketSZ},
+    MaxPagesPerMarket: 2,
+    StopOnError:       false,
+})
+
 ashares, err := client.ListAShares(ctx)
 markets := client.ListMarkets(ctx)
 ```
@@ -200,6 +206,7 @@ markets := client.ListMarkets(ctx)
 - `model.PartialResult[model.Security]`
 
 `ListSecurities` 会分页拉取，遇到部分市场失败时返回 typed partial result，不会静默丢失败信息。
+`ListSecuritiesWithOptions` / `ListASharesWithOptions` 可给全市场列表增加页数预算；达到 `MaxPagesPerMarket` 会返回 partial failure，而不是静默截断。
 
 ### K Lines
 

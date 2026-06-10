@@ -69,6 +69,12 @@ type CircuitBreakerOptions struct {
 const DefaultFileChunkSize = 30000
 const MaxFileChunks = 256
 
+type ListSecuritiesOptions struct {
+	Markets           []model.Market
+	MaxPagesPerMarket int
+	StopOnError       bool
+}
+
 type Dialer interface {
 	DialTDX(ctx context.Context, server model.Server, opts TransportOptions) (RoundTripper, error)
 }
@@ -494,6 +500,11 @@ func (c *Client) GetSecurityList(ctx context.Context, market model.Market, start
 }
 
 func (c *Client) ListSecurities(ctx context.Context, markets ...model.Market) (model.PartialResult[model.Security], error) {
+	return c.ListSecuritiesWithOptions(ctx, ListSecuritiesOptions{Markets: markets})
+}
+
+func (c *Client) ListSecuritiesWithOptions(ctx context.Context, opts ListSecuritiesOptions) (model.PartialResult[model.Security], error) {
+	markets := opts.Markets
 	if len(markets) == 0 {
 		markets = []model.Market{model.MarketSH, model.MarketSZ, model.MarketBJ}
 	}
@@ -505,17 +516,38 @@ func (c *Client) ListSecurities(ctx context.Context, markets ...model.Market) (m
 		count, err := c.GetSecurityCount(ctx, market)
 		if err != nil {
 			result.Failures = append(result.Failures, model.OperationError{Operation: "security_count", Market: market, Err: err.Error()})
+			if opts.StopOnError {
+				break
+			}
 			continue
 		}
+		pages := 0
 		for start := 0; start < int(count); start += 1000 {
 			if err := contextError(ctx); err != nil {
 				return result, err
 			}
+			if opts.MaxPagesPerMarket > 0 && pages >= opts.MaxPagesPerMarket {
+				result.Failures = append(result.Failures, model.OperationError{
+					Operation: "security_list_budget",
+					Market:    market,
+					Start:     start,
+					Count:     1000,
+					Err:       fmt.Sprintf("max pages per market reached: %d", opts.MaxPagesPerMarket),
+				})
+				if opts.StopOnError {
+					return result, fmt.Errorf("tdx list securities partial failures: %d", len(result.Failures))
+				}
+				break
+			}
 			items, err := c.GetSecurityList(ctx, market, start)
 			if err != nil {
 				result.Failures = append(result.Failures, model.OperationError{Operation: "security_list", Market: market, Start: start, Count: 1000, Err: err.Error()})
+				if opts.StopOnError {
+					return result, fmt.Errorf("tdx list securities partial failures: %d", len(result.Failures))
+				}
 				break
 			}
+			pages++
 			if len(items) == 0 {
 				break
 			}
@@ -532,7 +564,14 @@ func (c *Client) ListSecurities(ctx context.Context, markets ...model.Market) (m
 }
 
 func (c *Client) ListAShares(ctx context.Context) (model.PartialResult[model.Security], error) {
-	all, err := c.ListSecurities(ctx, model.MarketSH, model.MarketSZ, model.MarketBJ)
+	return c.ListASharesWithOptions(ctx, ListSecuritiesOptions{Markets: []model.Market{model.MarketSH, model.MarketSZ, model.MarketBJ}})
+}
+
+func (c *Client) ListASharesWithOptions(ctx context.Context, opts ListSecuritiesOptions) (model.PartialResult[model.Security], error) {
+	if len(opts.Markets) == 0 {
+		opts.Markets = []model.Market{model.MarketSH, model.MarketSZ, model.MarketBJ}
+	}
+	all, err := c.ListSecuritiesWithOptions(ctx, opts)
 	filtered := all.Items[:0]
 	for _, sec := range all.Items {
 		if isAshare(sec.Market, sec.Code) {

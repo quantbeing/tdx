@@ -506,6 +506,75 @@ func TestClientCooldownIsOperationAware(t *testing.T) {
 	}
 }
 
+func TestClientListSecuritiesWithOptionsStopsAtPageBudget(t *testing.T) {
+	var listCalls int32
+	client := NewClient(Options{
+		Servers: []model.Server{{Name: "good", Host: "good", Port: 7709}},
+		Pool:    PoolOptions{Disable: true},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				switch cmd.Operation() {
+				case "security_count":
+					return uint16(2500), nil
+				case "security_list":
+					atomic.AddInt32(&listCalls, 1)
+					out := make([]model.Security, 1000)
+					for i := range out {
+						out[i] = model.Security{Market: model.MarketSH, Code: "600519"}
+					}
+					return out, nil
+				default:
+					t.Fatalf("operation = %s", cmd.Operation())
+				}
+				return nil, nil
+			}), nil
+		}),
+	})
+
+	got, err := client.ListSecuritiesWithOptions(context.Background(), ListSecuritiesOptions{
+		Markets:           []model.Market{model.MarketSH},
+		MaxPagesPerMarket: 1,
+	})
+	if err == nil {
+		t.Fatal("ListSecuritiesWithOptions unexpectedly succeeded")
+	}
+	if len(got.Items) != 1000 || len(got.Failures) != 1 || got.Failures[0].Operation != "security_list_budget" {
+		t.Fatalf("partial = %+v err=%v", got, err)
+	}
+	if listCalls != 1 {
+		t.Fatalf("listCalls = %d, want 1", listCalls)
+	}
+}
+
+func TestClientListSecuritiesWithOptionsCanStopOnError(t *testing.T) {
+	var markets []model.Market
+	client := NewClient(Options{
+		Servers: []model.Server{{Name: "good", Host: "good", Port: 7709}},
+		Pool:    PoolOptions{Disable: true},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				if cmd.Operation() != "security_count" {
+					t.Fatalf("operation = %s, want security_count", cmd.Operation())
+				}
+				countCmd := cmd.(command.SecurityCountCommand)
+				markets = append(markets, countCmd.Market)
+				return nil, errors.New("count unavailable")
+			}), nil
+		}),
+	})
+
+	got, err := client.ListSecuritiesWithOptions(context.Background(), ListSecuritiesOptions{
+		Markets:     []model.Market{model.MarketSH, model.MarketSZ},
+		StopOnError: true,
+	})
+	if err == nil {
+		t.Fatal("ListSecuritiesWithOptions unexpectedly succeeded")
+	}
+	if len(got.Failures) != 1 || len(markets) != 1 || markets[0] != model.MarketSH {
+		t.Fatalf("failures=%+v markets=%v", got.Failures, markets)
+	}
+}
+
 func TestKeepAliveClosesConnectionAfterFailures(t *testing.T) {
 	var closed int32
 	rt := &closeAwareRoundTripper{

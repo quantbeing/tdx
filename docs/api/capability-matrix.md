@@ -12,7 +12,7 @@
 | Observability hooks | yes | `Observer` receives per-attempt events with operation, host, attempt, latency, error, row count, body size, and connection reuse flag. |
 | Metrics collector | yes | `NewMetricsCollector` aggregates attempts, successes, failures, row counts, latency, and last error by operation/host. |
 | Idle heartbeat | yes | `KeepAliveManager` closes repeated-failure connections. |
-| Security count/list | yes | Raw/unknown fields preserved. `tdx-validate -full-security-list` pages through the complete selected-market list, emits per-page results, checks count parity plus duplicate symbols, and supports page-level retry through `-security-list-page-retries`. |
+| Security count/list | yes | Raw/unknown fields preserved. `ListSecuritiesWithOptions` and `ListASharesWithOptions` add page-budget controls with typed partial failures. `tdx-validate -full-security-list` pages through the complete selected-market list, emits per-page results, checks count parity plus duplicate symbols, and supports page-level retry through `-security-list-page-retries`. |
 | Stock/index K-line | yes | Index parser keeps `UpCount` and `DownCount`. |
 | Snapshot/quotes | yes | Parser implemented with 5-level book, server time, unknown fields, raw record bytes, and 80-symbol batch splitting. 2026-06-09 live multi-market fixture fixed and validated SH/SZ offset handling. |
 | Minute time / transactions | yes | Today/history parsers implemented; `unknown_1`, `NumOrders`, and `UnknownLast` are preserved. 2026-06-09 live minute fixture fixed the real-time symbol prefix skip and removed the prior negative-volume warnings in smoke validation. |
