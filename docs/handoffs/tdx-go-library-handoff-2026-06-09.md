@@ -89,6 +89,7 @@ This does not yet mean "all TDX data". The current library covers the HQ `7709` 
 - Created protocol investigation notes in `docs/investigations/tdx-protocol-python-implementations.md`.
 - Created protocol notes in `docs/protocol/tdx-hq-protocol.md`.
 - Created capability matrix in `docs/api/capability-matrix.md`.
+- Created protocol/interface mapping in `docs/api/protocol-interface-map.md`, covering TCP setup/frame/codec, raw command mappings, parser fields, and composite API chains.
 - Expanded `README.md` with installation, options, public API examples, diagnostics, fault tests, known limits, and agent checklist.
 
 ### Protocol Kernel

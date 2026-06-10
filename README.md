@@ -659,6 +659,8 @@ defer server.Close()
 
 ## Testing
 
+协议和接口映射见 [docs/api/protocol-interface-map.md](docs/api/protocol-interface-map.md)。这份文档列出了每个 public API 对应的 TDX TCP command、请求格式、字段解析方式，以及 `ListSecurities`、`ListAShares`、`GetFundFlow`、`GetHistoryFundFlow`、板块/文件等复合接口的组合链路。
+
 ```bash
 go vet ./...
 go test -count=1 ./...
