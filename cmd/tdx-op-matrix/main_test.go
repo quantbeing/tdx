@@ -16,9 +16,18 @@ import (
 type cliMatrixFakeClient struct {
 	server   model.Server
 	observer tdx.Observer
+	wait     bool
 }
 
-func (c cliMatrixFakeClient) HealthCheck(_ context.Context, ops ...command.Command) []tdx.OperationHealth {
+func (c cliMatrixFakeClient) HealthCheck(ctx context.Context, ops ...command.Command) []tdx.OperationHealth {
+	if c.wait {
+		<-ctx.Done()
+		operation := ""
+		if len(ops) > 0 {
+			operation = ops[0].Operation()
+		}
+		return []tdx.OperationHealth{{Operation: operation, OK: false, Error: ctx.Err().Error()}}
+	}
 	out := make([]tdx.OperationHealth, 0, len(ops))
 	for _, op := range ops {
 		if c.observer != nil {
@@ -38,6 +47,26 @@ func (c cliMatrixFakeClient) HealthCheck(_ context.Context, ops ...command.Comma
 
 func (c cliMatrixFakeClient) Close() error {
 	return nil
+}
+
+func TestRunReturnsTimeoutErrorAndWritesPartialReport(t *testing.T) {
+	var out bytes.Buffer
+	err := run([]string{
+		"-allow-live",
+		"-hosts", "127.0.0.1:7709",
+		"-ops", "security-count",
+		"-timeout", "5ms",
+		"-operation-timeout", "1s",
+	}, &out, func(string) string { return "" }, func(server model.Server, observer tdx.Observer) diagnostic.OperationMatrixClient {
+		return cliMatrixFakeClient{server: server, observer: observer, wait: true}
+	})
+	if err == nil || !strings.Contains(err.Error(), "context deadline exceeded") {
+		t.Fatalf("err = %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, `"canceled":true`) || !strings.Contains(got, `"context deadline exceeded"`) {
+		t.Fatalf("output = %s", got)
+	}
 }
 
 func TestRunWritesMatrixJSON(t *testing.T) {

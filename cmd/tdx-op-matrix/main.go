@@ -95,13 +95,27 @@ func run(args []string, stdout io.Writer, getenv func(string) string, factory di
 				return err
 			}
 		}
-		return enc.Encode(map[string]any{
+		if err := enc.Encode(map[string]any{
 			"summary":                 report.Summary,
 			"timeout_recommendations": report.TimeoutRecommendations,
 			"duration_ms":             report.DurationMS,
-		})
+			"canceled":                report.Canceled,
+			"error":                   report.Error,
+		}); err != nil {
+			return err
+		}
+		if report.Canceled {
+			return fmt.Errorf("operation matrix canceled: %s", report.Error)
+		}
+		return nil
 	}
-	return enc.Encode(report)
+	if err := enc.Encode(report); err != nil {
+		return err
+	}
+	if report.Canceled {
+		return fmt.Errorf("operation matrix canceled: %s", report.Error)
+	}
+	return nil
 }
 
 func splitCSV(raw string) []string {

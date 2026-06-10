@@ -745,6 +745,9 @@ func (c *Client) GetBlockInfo(ctx context.Context, filename string) ([]model.Boa
 	if !ok {
 		return nil, fmt.Errorf("tdx block_info_meta unexpected reply %T", got)
 	}
+	if meta.Size <= 0 {
+		return nil, fmt.Errorf("tdx block_info %q empty metadata: size=%d", filename, meta.Size)
+	}
 	data := make([]byte, 0, meta.Size)
 	for start := 0; start < meta.Size; start += DefaultFileChunkSize {
 		length := DefaultFileChunkSize
@@ -764,7 +767,14 @@ func (c *Client) GetBlockInfo(ctx context.Context, filename string) ([]model.Boa
 			break
 		}
 	}
-	return command.ParseBlockData(data, filename), nil
+	if len(data) == 0 {
+		return nil, fmt.Errorf("tdx block_info %q empty payload", filename)
+	}
+	boards := command.ParseBlockData(data, filename)
+	if len(boards) == 0 {
+		return nil, fmt.Errorf("tdx block_info %q invalid payload: bytes=%d meta_size=%d", filename, len(data), meta.Size)
+	}
+	return boards, nil
 }
 func (c *Client) GetReportFile(ctx context.Context, filename string) ([]byte, error) {
 	data := make([]byte, 0)
@@ -782,6 +792,9 @@ func (c *Client) GetReportFile(ctx context.Context, filename string) ([]byte, er
 		if len(chunk) < DefaultFileChunkSize {
 			break
 		}
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("tdx report_file %q empty payload", filename)
 	}
 	return data, nil
 }
@@ -1199,10 +1212,16 @@ func (NetDialer) DialTDX(ctx context.Context, server model.Server, opts Transpor
 		return nil, err
 	}
 	rt := &tcpRoundTripper{conn: conn, opts: opts}
+	setupDeadline := time.Now().Add(timeout)
+	if deadline, ok := ctx.Deadline(); ok && deadline.Before(setupDeadline) {
+		setupDeadline = deadline
+	}
+	_ = conn.SetDeadline(setupDeadline)
 	if err := rt.setup(); err != nil {
 		_ = conn.Close()
 		return nil, err
 	}
+	_ = conn.SetDeadline(time.Time{})
 	return rt, nil
 }
 
@@ -1259,7 +1278,9 @@ func (t *tcpRoundTripper) setup() error {
 		if _, err := t.conn.Write(req); err != nil {
 			return err
 		}
-		_, _ = readFrame(t.conn)
+		if _, err := readFrame(t.conn); err != nil {
+			return err
+		}
 	}
 	return nil
 }

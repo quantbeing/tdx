@@ -15,9 +15,18 @@ type fakeMatrixClient struct {
 	server   model.Server
 	observer tdx.Observer
 	fail     bool
+	wait     bool
 }
 
-func (f *fakeMatrixClient) HealthCheck(_ context.Context, ops ...command.Command) []tdx.OperationHealth {
+func (f *fakeMatrixClient) HealthCheck(ctx context.Context, ops ...command.Command) []tdx.OperationHealth {
+	if f.wait {
+		<-ctx.Done()
+		operation := ""
+		if len(ops) > 0 {
+			operation = ops[0].Operation()
+		}
+		return []tdx.OperationHealth{{Operation: operation, OK: false, Error: ctx.Err().Error()}}
+	}
 	out := make([]tdx.OperationHealth, 0, len(ops))
 	for _, op := range ops {
 		if f.fail {
@@ -52,6 +61,35 @@ func (f *fakeMatrixClient) HealthCheck(_ context.Context, ops ...command.Command
 
 func (f *fakeMatrixClient) Close() error {
 	return nil
+}
+
+func TestRunOperationMatrixStopsAfterContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var calls int
+	report := RunOperationMatrix(ctx, OperationMatrixOptions{
+		Servers: []model.Server{
+			{Name: "one", Host: "127.0.0.1", Port: 7709},
+			{Name: "two", Host: "127.0.0.2", Port: 7709},
+		},
+		Operations: []MatrixOperation{
+			{Name: "count", Command: command.NewSecurityCountCommand(model.MarketSH)},
+			{Name: "quote", Command: command.NewSecurityQuotesCommand([]model.Symbol{{Market: model.MarketSH, Code: "600519"}})},
+		},
+		Repeats:             2,
+		PerOperationTimeout: time.Second,
+		NewClient: func(server model.Server, observer tdx.Observer) OperationMatrixClient {
+			calls++
+			cancel()
+			return &fakeMatrixClient{server: server, observer: observer}
+		},
+	})
+
+	if !report.Canceled || report.Error == "" {
+		t.Fatalf("report cancellation = canceled:%v error:%q", report.Canceled, report.Error)
+	}
+	if calls != 1 || len(report.Results) != 1 {
+		t.Fatalf("calls=%d results=%d, want one scheduled probe", calls, len(report.Results))
+	}
 }
 
 func TestRunOperationMatrixAggregatesByOperationAndHost(t *testing.T) {

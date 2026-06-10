@@ -3,6 +3,7 @@ package diagnostic
 import (
 	"context"
 	"sort"
+	"sync"
 	"time"
 
 	tdx "github.com/quantbeing/tdx"
@@ -68,6 +69,8 @@ type OperationMatrixReport struct {
 	StartedAt              time.Time                `json:"started_at"`
 	FinishedAt             time.Time                `json:"finished_at"`
 	DurationMS             int64                    `json:"duration_ms"`
+	Canceled               bool                     `json:"canceled,omitempty"`
+	Error                  string                   `json:"error,omitempty"`
 	Results                []OperationMatrixResult  `json:"results"`
 	Summary                []OperationMatrixSummary `json:"summary"`
 	TimeoutRecommendations []TimeoutRecommendation  `json:"timeout_recommendations,omitempty"`
@@ -110,11 +113,25 @@ func RunOperationMatrix(ctx context.Context, opts OperationMatrixOptions) Operat
 	for run := 1; run <= opts.Repeats; run++ {
 		for _, server := range opts.Servers {
 			for _, op := range opts.Operations {
+				if err := ctx.Err(); err != nil {
+					report.Canceled = true
+					report.Error = err.Error()
+					return finalizeOperationMatrixReport(report, opts)
+				}
 				result := runOneOperationMatrixProbe(ctx, opts, run, server, op)
 				report.Results = append(report.Results, result)
+				if err := ctx.Err(); err != nil {
+					report.Canceled = true
+					report.Error = err.Error()
+					return finalizeOperationMatrixReport(report, opts)
+				}
 			}
 		}
 	}
+	return finalizeOperationMatrixReport(report, opts)
+}
+
+func finalizeOperationMatrixReport(report OperationMatrixReport, opts OperationMatrixOptions) OperationMatrixReport {
 	report.FinishedAt = time.Now()
 	report.DurationMS = report.FinishedAt.Sub(report.StartedAt).Milliseconds()
 	report.Summary = summarizeOperationMatrix(report.Results)
@@ -154,9 +171,16 @@ func normalizeOperationMatrixOptions(opts OperationMatrixOptions) OperationMatri
 func runOneOperationMatrixProbe(ctx context.Context, opts OperationMatrixOptions, run int, server model.Server, op MatrixOperation) OperationMatrixResult {
 	collector := &operationMatrixAttemptCollector{}
 	client := opts.NewClient(server, collector)
-	defer func() {
+	closed := false
+	closeClient := func() {
 		if client != nil {
 			_ = client.Close()
+		}
+		closed = true
+	}
+	defer func() {
+		if !closed {
+			closeClient()
 		}
 	}()
 
@@ -169,7 +193,20 @@ func runOneOperationMatrixProbe(ctx context.Context, opts OperationMatrixOptions
 	opCtx, cancel := context.WithTimeout(ctx, opts.PerOperationTimeout)
 	defer cancel()
 	start := time.Now()
-	health := client.HealthCheck(opCtx, op.Command)
+	healthCh := make(chan []tdx.OperationHealth, 1)
+	go func() {
+		healthCh <- client.HealthCheck(opCtx, op.Command)
+	}()
+	var health []tdx.OperationHealth
+	select {
+	case health = <-healthCh:
+	case <-opCtx.Done():
+		closeClient()
+		result.LatencyMS = time.Since(start).Milliseconds()
+		result.Attempts = collector.attempts()
+		result.Error = opCtx.Err().Error()
+		return result
+	}
 	result.LatencyMS = time.Since(start).Milliseconds()
 	result.Attempts = collector.attempts()
 	if len(health) == 0 {
@@ -185,10 +222,13 @@ func runOneOperationMatrixProbe(ctx context.Context, opts OperationMatrixOptions
 }
 
 type operationMatrixAttemptCollector struct {
+	mu     sync.Mutex
 	events []OperationMatrixAttempt
 }
 
 func (c *operationMatrixAttemptCollector) OnRequest(event tdx.RequestEvent) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.events = append(c.events, OperationMatrixAttempt{
 		Attempt:   event.Attempt,
 		Server:    event.Server,
@@ -202,6 +242,8 @@ func (c *operationMatrixAttemptCollector) OnRequest(event tdx.RequestEvent) {
 }
 
 func (c *operationMatrixAttemptCollector) attempts() []OperationMatrixAttempt {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return append([]OperationMatrixAttempt(nil), c.events...)
 }
 

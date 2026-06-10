@@ -539,6 +539,8 @@ TDX_LIVE=1 go run ./cmd/tdx-op-matrix \
 
 JSON 报告会包含 `timeout_recommendations`，按每个 host/operation 给出启发式推荐：成功样本使用 `max_latency * 4` 并做上下限夹取；没有成功样本的 timeout 型失败使用 fail-fast 推荐值。这个结果用于调参和观察，不会自动改客户端配置。
 
+如果外层 `-timeout` 到期，`tdx-op-matrix` 会停止继续调度，输出已完成的 partial report，并在 JSON/JSONL summary 中标记 `canceled/error`。
+
 2026-06-10 首轮 3 host、5 operation、2 repeats 压测结果：`180.153.18.171:7709` 对所有测试 operation 均 connect timeout；`security-list-bj` 在 `180.153.18.170:7709` 和 `115.238.56.198:7709` 上均 read timeout；`quote` 和 `security-count` 在这两个 host 上成功。因此失败不是同一节点单点问题，而是同时存在坏节点和 BJ list 的 operation/market 级失败。完整表见 [operation-host-matrix-2026-06-10.md](/Users/liuhanqing01/projects/tdx/docs/validation/operation-host-matrix-2026-06-10.md)。
 
 常用参数：

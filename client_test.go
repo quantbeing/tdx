@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -587,6 +588,42 @@ func TestClientGetReportFileFetchesUntilShortChunk(t *testing.T) {
 	}
 	if len(got) != DefaultFileChunkSize+3 || calls != 2 {
 		t.Fatalf("len=%d calls=%d", len(got), calls)
+	}
+}
+
+func TestClientGetReportFileRejectsEmptyPayload(t *testing.T) {
+	client := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				if cmd.Operation() != "report_file" {
+					t.Fatalf("operation = %s, want report_file", cmd.Operation())
+				}
+				return []byte{}, nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.GetReportFile(context.Background(), "base_info.zip"); err == nil || !strings.Contains(err.Error(), "empty payload") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestClientGetBlockInfoRejectsEmptyMeta(t *testing.T) {
+	client := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				if cmd.Operation() != "block_info_meta" {
+					t.Fatalf("operation = %s, want block_info_meta", cmd.Operation())
+				}
+				return model.FileMeta{Filename: "block_gn.dat", Size: 0}, nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.GetBlockInfo(context.Background(), "block_gn.dat"); err == nil || !strings.Contains(err.Error(), "empty metadata") {
+		t.Fatalf("err = %v", err)
 	}
 }
 
