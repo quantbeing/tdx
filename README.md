@@ -120,6 +120,8 @@ defer client.Close()
 
 默认 retry 是 failover-first：每次失败后先尝试下一个 host。单元测试覆盖了一个坏 host、一个好 host 的场景，failover-first 在 `MaxAttempts=2` 下 `6/6` 成功；same-host-first 因把两次机会都耗在坏 host 上，成功率更低。same-host-first 适合自建私有节点或明确是瞬时半包/短抖动的场景，公网行情默认不建议开启。
 
+组合接口会在内部每个 batch/page/chunk 之间检查父 context。业务侧应给全量列表、资金流、板块和文件下载这类重接口设置外层 `context.WithTimeout`，超时后不会继续调度新的内部请求。
+
 ## Markets And Categories
 
 市场：

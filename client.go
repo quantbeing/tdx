@@ -499,12 +499,18 @@ func (c *Client) ListSecurities(ctx context.Context, markets ...model.Market) (m
 	}
 	var result model.PartialResult[model.Security]
 	for _, market := range markets {
+		if err := contextError(ctx); err != nil {
+			return result, err
+		}
 		count, err := c.GetSecurityCount(ctx, market)
 		if err != nil {
 			result.Failures = append(result.Failures, model.OperationError{Operation: "security_count", Market: market, Err: err.Error()})
 			continue
 		}
 		for start := 0; start < int(count); start += 1000 {
+			if err := contextError(ctx); err != nil {
+				return result, err
+			}
 			items, err := c.GetSecurityList(ctx, market, start)
 			if err != nil {
 				result.Failures = append(result.Failures, model.OperationError{Operation: "security_list", Market: market, Start: start, Count: 1000, Err: err.Error()})
@@ -567,6 +573,9 @@ func (c *Client) GetBars(ctx context.Context, market model.Market, code string, 
 func (c *Client) GetSecurityQuotes(ctx context.Context, symbols []model.Symbol) ([]model.Quote, error) {
 	out := make([]model.Quote, 0, len(symbols))
 	for start := 0; start < len(symbols); start += command.MaxQuoteBatch {
+		if err := contextError(ctx); err != nil {
+			return nil, err
+		}
 		end := start + command.MaxQuoteBatch
 		if end > len(symbols) {
 			end = len(symbols)
@@ -655,7 +664,7 @@ func (c *Client) GetMarketStat(ctx context.Context) (model.MarketStat, error) {
 	}, nil
 }
 func (c *Client) GetFundFlow(ctx context.Context, market model.Market, code string) (model.FundFlow, error) {
-	records, err := c.collectTransactionRecords(func(start int, count int) ([]model.Transaction, error) {
+	records, err := c.collectTransactionRecords(ctx, func(start int, count int) ([]model.Transaction, error) {
 		return c.GetTransactionData(ctx, market, code, start, count)
 	}, 2000, 10000)
 	if err != nil {
@@ -669,6 +678,8 @@ func (c *Client) GetHistoryFundFlow(ctx context.Context, market model.Market, co
 		if rows, ok := got.([]model.HistoricalFundFlow); ok && len(rows) > 0 {
 			return rows, nil
 		}
+	} else if isContextErr(err) {
+		return nil, err
 	}
 	bars, err := c.GetSecurityBars(ctx, market, code, model.KlineDay, start, count)
 	if err != nil {
@@ -676,8 +687,11 @@ func (c *Client) GetHistoryFundFlow(ctx context.Context, market model.Market, co
 	}
 	out := make([]model.HistoricalFundFlow, 0, len(bars))
 	for _, bar := range bars {
+		if err := contextError(ctx); err != nil {
+			return nil, err
+		}
 		date := bar.Year*10000 + bar.Month*100 + bar.Day
-		records, err := c.collectTransactionRecords(func(pageStart int, pageSize int) ([]model.Transaction, error) {
+		records, err := c.collectTransactionRecords(ctx, func(pageStart int, pageSize int) ([]model.Transaction, error) {
 			return c.GetHistoryTransactionData(ctx, market, code, date, pageStart, pageSize)
 		}, 800, 10000)
 		if err != nil {
@@ -750,6 +764,9 @@ func (c *Client) GetBlockInfo(ctx context.Context, filename string) ([]model.Boa
 	}
 	data := make([]byte, 0, meta.Size)
 	for start := 0; start < meta.Size; start += DefaultFileChunkSize {
+		if err := contextError(ctx); err != nil {
+			return nil, err
+		}
 		length := DefaultFileChunkSize
 		if remain := meta.Size - start; remain < length {
 			length = remain
@@ -779,6 +796,9 @@ func (c *Client) GetBlockInfo(ctx context.Context, filename string) ([]model.Boa
 func (c *Client) GetReportFile(ctx context.Context, filename string) ([]byte, error) {
 	data := make([]byte, 0)
 	for i := 0; i < MaxFileChunks; i++ {
+		if err := contextError(ctx); err != nil {
+			return nil, err
+		}
 		start := i * DefaultFileChunkSize
 		got, err := c.execute(ctx, command.NewReportFileCommand(filename, start, DefaultFileChunkSize))
 		if err != nil {
@@ -812,6 +832,9 @@ func (c *Client) ListBoards(ctx context.Context, boardType string) ([]model.Boar
 }
 func (c *Client) ListBoardMembers(ctx context.Context, boardCode string) ([]string, error) {
 	for _, filename := range []string{"block_gn.dat", "block_fg.dat", "block_zs.dat"} {
+		if err := contextError(ctx); err != nil {
+			return nil, err
+		}
 		boards, err := c.GetBlockInfo(ctx, filename)
 		if err != nil {
 			continue
@@ -840,11 +863,14 @@ type pageSignature struct {
 	Last  transactionSignature
 }
 
-func (c *Client) collectTransactionRecords(fetch func(start int, count int) ([]model.Transaction, error), pageSize int, maxStart int) ([]model.Transaction, error) {
+func (c *Client) collectTransactionRecords(ctx context.Context, fetch func(start int, count int) ([]model.Transaction, error), pageSize int, maxStart int) ([]model.Transaction, error) {
 	out := make([]model.Transaction, 0)
 	seenRecords := make(map[transactionSignature]struct{})
 	seenPages := make(map[pageSignature]struct{})
 	for start := 0; start < maxStart; {
+		if err := contextError(ctx); err != nil {
+			return nil, err
+		}
 		records, err := fetch(start, pageSize)
 		if err != nil {
 			return nil, err
@@ -972,6 +998,17 @@ func (c *Client) execute(ctx context.Context, cmd command.Command) (any, error) 
 		lastErr = errors.New("tdx: no attempts executed")
 	}
 	return nil, lastErr
+}
+
+func contextError(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Err()
+}
+
+func isContextErr(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 func (c *Client) acquire(ctx context.Context, idx int, server model.Server) (RoundTripper, bool, error) {

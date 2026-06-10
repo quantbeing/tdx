@@ -565,6 +565,36 @@ func TestClientGetSecurityQuotesSplitsBatchesAtProtocolLimit(t *testing.T) {
 	}
 }
 
+func TestClientGetSecurityQuotesStopsWhenContextCanceledBetweenBatches(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var calls int32
+	client := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				calls++
+				if cmd.Operation() != "security_quotes" {
+					t.Fatalf("operation = %s, want security_quotes", cmd.Operation())
+				}
+				cancel()
+				return make([]model.Quote, command.MaxQuoteBatch), nil
+			}), nil
+		}),
+	})
+	symbols := make([]model.Symbol, command.MaxQuoteBatch+1)
+	for i := range symbols {
+		symbols[i] = model.Symbol{Market: model.MarketSH, Code: "600519"}
+	}
+
+	if _, err := client.GetSecurityQuotes(ctx, symbols); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
 func TestClientGetReportFileFetchesUntilShortChunk(t *testing.T) {
 	var calls int32
 	client := NewClient(Options{
@@ -588,6 +618,32 @@ func TestClientGetReportFileFetchesUntilShortChunk(t *testing.T) {
 	}
 	if len(got) != DefaultFileChunkSize+3 || calls != 2 {
 		t.Fatalf("len=%d calls=%d", len(got), calls)
+	}
+}
+
+func TestClientGetReportFileStopsWhenContextCanceledBetweenChunks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var calls int32
+	client := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				calls++
+				if cmd.Operation() != "report_file" {
+					t.Fatalf("operation = %s, want report_file", cmd.Operation())
+				}
+				cancel()
+				return bytesOfLen(DefaultFileChunkSize), nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.GetReportFile(ctx, "base_info.zip"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
 	}
 }
 
@@ -657,6 +713,36 @@ func TestClientGetMarketStatFrom880005Quote(t *testing.T) {
 	}
 	if got.TotalAmount != 123 || got.TotalVolume != 456 {
 		t.Fatalf("amount/volume = %f/%f", got.TotalAmount, got.TotalVolume)
+	}
+}
+
+func TestClientGetFundFlowStopsWhenContextCanceledBetweenPages(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var calls int32
+	records := make([]model.Transaction, 100)
+	for i := range records {
+		records[i] = model.Transaction{Hour: 9, Minute: 30 + i, Price: model.NewDecimal(1000, 2), Vol: 100, BuyOrSell: 0}
+	}
+	client := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				calls++
+				if cmd.Operation() != "transaction" {
+					t.Fatalf("operation = %s, want transaction", cmd.Operation())
+				}
+				cancel()
+				return records, nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.GetFundFlow(ctx, model.MarketSH, "600519"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
 	}
 }
 
