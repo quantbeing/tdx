@@ -24,7 +24,8 @@
 | BJ stable full universe | partial | Public servers are unstable; `security_count_BJ=345` is reachable but `security_list_BJ_page_0` timed out in live validation. Official data-package probe can enumerate candidates, but complete name/status metadata fallback remains to implement. |
 | Raw fixture capture | yes | `Client.Capture`, `tdx-probe -capture-dir`, and `tdx-fixture-matrix` preserve request/header/raw-body/decoded-body/parsed JSON. |
 | Python comparison CLI | yes | `tdx-compare-py` compares Go JSON or fixture `parsed_json` against pytdx/xmtdx reference JSON. |
+| Operation-host matrix | yes | `tdx-op-matrix` runs selected operations against each host with `MaxAttempts=1`, repeats samples for light stress testing, and reports per-host success rate, latency, rows, and last error. |
 | Live integrity validation | partial | `tdx-validate` runs public API checks and emits JSON reports with per-operation timeout. Latest 2026-06-09 smoke has 0 warnings for SH/SZ core quote/minute checks; remaining failures are public-server timeouts for fund-flow/history-fund-flow plus empty report-file payloads. |
 | Benchmarks | yes | Codec, frame, command parser, validation, and quote batch-split benchmarks are implemented with `go test -run=^$ -bench=. -benchmem ./codec ./frame ./command ./validation .`. |
-| CLI diagnostics | yes | `tdx-health`, `tdx-probe`, `tdx-data-probe`, `tdx-fixture-matrix`, `tdx-validate`, `tdx-dump-frame`, and `tdx-compare-py` are implemented; matrix output is JSONL and continues after per-operation failures. |
+| CLI diagnostics | yes | `tdx-health`, `tdx-probe`, `tdx-data-probe`, `tdx-op-matrix`, `tdx-fixture-matrix`, `tdx-validate`, `tdx-dump-frame`, and `tdx-compare-py` are implemented; matrix output can be JSON or JSONL and continues after per-operation failures. |
 | Fake TDX fault server | yes | `tdxtest.StartScript` simulates normal frames, raw bytes, bad zlib, partial frames, delayed responses, and disconnects. |

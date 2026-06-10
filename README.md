@@ -490,6 +490,32 @@ TDX_LIVE=1 go run ./cmd/tdx-validate \
 
 `tdx-validate` 会直接调用 public API，并输出 JSON 完整性报告：每个 operation 的 `ok`、行数、latency、error/warning finding 都会保留。默认需要 `TDX_LIVE=1`，避免普通测试误打公网。
 
+### Operation Host Matrix
+
+`tdx-op-matrix` 用于回答“某个失败是不是同一个公网节点导致的”。它会按 `host * operation * repeats` 逐项运行，每个 host 使用独立 client 且 `MaxAttempts=1`，因此不会被 failover 混淆。
+
+```bash
+TDX_LIVE=1 go run ./cmd/tdx-op-matrix \
+  -hosts 180.153.18.170:7709,180.153.18.171:7709,115.238.56.198:7709 \
+  -ops security-count,quote,security-list-bj,history-fund-flow,report \
+  -repeats 2 \
+  -operation-timeout 6s \
+  -connect-timeout 1s
+```
+
+`tdx-validate` 常用参数：
+
+| Flag | 用途 |
+|---|---|
+| `-hosts` | 指定 host 列表；为空时使用 `KnownServers()`。 |
+| `-ops` | 逗号分隔的 operation 名称，复用 `tdx-fixture-matrix` 的 operation 名称。 |
+| `-repeats 2` | 每个 host/operation 跑几轮，用于小型压测和稳定性抽样。 |
+| `-operation-timeout 6s` | 每个 host/operation 的独立超时。 |
+| `-connect-timeout 1s` | TCP connect/write timeout。 |
+| `-jsonl` | 输出每个 result 一行 JSONL，最后追加 summary 行。 |
+
+2026-06-10 首轮 3 host、5 operation、2 repeats 压测结果：`180.153.18.171:7709` 对所有测试 operation 均 connect timeout；`security-list-bj` 在 `180.153.18.170:7709` 和 `115.238.56.198:7709` 上均 read timeout；`quote` 和 `security-count` 在这两个 host 上成功。因此失败不是同一节点单点问题，而是同时存在坏节点和 BJ list 的 operation/market 级失败。完整表见 [operation-host-matrix-2026-06-10.md](/Users/liuhanqing01/projects/tdx/docs/validation/operation-host-matrix-2026-06-10.md)。
+
 常用参数：
 
 | Flag | 用途 |
@@ -584,6 +610,7 @@ Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
 - `TDX_LIVE=1 tdx-validate -markets sh,sz -symbols sh:600519,sz:000001 -skip-boards -skip-files`：14 项检查，12 OK，2 个公网超时错误，0 warnings；multi-market quote 返回 2 行并通过 symbol 完整性校验。
 - `tdx-validate -full-security-list` 已支持全市场分页完整性校验；默认 smoke 为了速度仍只查第 0 页。最新 SH/SZ live baseline 加上 `-security-list-page-retries 1` 后分别拉完 27215/23411 行，若干分页首次失败后重试成功并保留 warning。
 - BJ live baseline 中 `security_count_BJ=345`，但 `security_list_BJ_page_0` 在 15s timeout、3 次 page retry 下仍超时。`tdx-data-probe` 已确认官方 `tdxgp/gpszsh.txt` 与 `gpszsh.local` 可枚举 `319` 个 `gpbj*.dat` 候选，但还不能替代完整 BJ 证券列表。
+- `tdx-op-matrix` 首轮压测显示 `180.153.18.171:7709` 是当前网络下的 host-level failure；但 `security-list-bj` 在可用 host 上也 read timeout，说明 BJ list 不是单一坏节点问题。
 - `TDX_LIVE=1 tdx-validate` 含 boards/files：`boards_concept` 返回 270 行，`report_file_base_info.zip` 在当前公网节点返回 0 字节，仍需 fallback/节点矩阵继续反推。
 - 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `34.0 us/op`，minute parser 约 `9.1 us/op`，5000 行 universe validation 约 `244.0 us/op`，80 符号 quote 分片 client benchmark 约 `15.5 us/op`。新增官方数据包 parser benchmark 中，7240 行 manifest 约 `1.72 ms/op`，7240 行 `.local` index 约 `1.31 ms/op`，10858 条 fixed13 raw record 约 `0.31 ms/op`。完整输出记录在 handoff 文档。
 
@@ -607,6 +634,7 @@ Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
 5. 批量快照用 `GetSecurityQuotes`，它会自动分片。
 6. 需要反推协议字段时用 `Client.Capture` 或 `tdx-probe -capture-dir`。
 7. 调查官方数据包 fallback 时用 `tdx-data-probe -prefix gpbj` 和 `tdx-data-probe -kind local-index -prefix gpbj`。
-8. 和 pytdx/xmtdx 对照时用 `tdx-compare-py`。
-9. 遇到故障复现时用 `tdxtest.StartScript` 写 fake server 测试。
-10. 发布前用 `tdx-validate` 跑 live 完整性报告，并用 `go test -bench=. -benchmem` 更新性能基线。
+8. 判断公网节点/operation 是否稳定时用 `tdx-op-matrix`，重点看 per-host success rate 和 last error。
+9. 和 pytdx/xmtdx 对照时用 `tdx-compare-py`。
+10. 遇到故障复现时用 `tdxtest.StartScript` 写 fake server 测试。
+11. 发布前用 `tdx-validate` 跑 live 完整性报告，并用 `go test -bench=. -benchmem` 更新性能基线。

@@ -289,6 +289,7 @@ Latest live runs in this environment, on 2026-06-09 around 21:04-21:06 Asia/Shan
 - `gpbj920021.dat` downloaded by curl was 141154 bytes and parsed into 10858 fixed 13-byte records with no trailing bytes. First date-like values were `20151231`, `20160630`, `20161231`, `20170630`; first float32-like values were `17`, `36`, `55`, `181`.
 - The `dat13` summary now includes marker counts, sorted marker-group summaries, date-like min/max, float32-like min/max, and non-zero field2 count. For `gpbj920021.dat`, min/max date-like was `0/20260609`, field1 range was about `-1820.42/502124.97`, and field2 was non-zero in `3048` rows.
 - Useful marker-group clues in `gpbj920021.dat`: marker `1` has 33 rows and field2 always zero; markers `3/11/12/13` each have 804 rows and the same date range `20230213..20260608`; marker `27` has 1483 rows and field2 is non-zero in every row. Treat these as row classes to reverse engineer separately.
+- 2026-06-10 operation-host matrix added `tdx-op-matrix`. First controlled stress run used 3 hosts, 5 operations, and 2 repeats each, for 30 host/operation runs in 36705 ms. `180.153.18.171:7709` failed every tested operation with connect timeout. `security-list-bj` also failed on `180.153.18.170:7709` and `115.238.56.198:7709` with read timeout while quote/count succeeded there. So failures are not one-node-only: there is at least one bad host plus a BJ list operation/market failure.
 - Passed across these runs: SH/SZ count and first security-list pages, single-symbol quote, multi-market quote, day bars, minute-time structural check, transaction page when public server responded, market stat, finance, XDXR, company category, and `boards_concept` with 270 rows.
 - Failed due current public-server behavior: `fund_flow_SH_600519` and `history_fund_flow_SH_600519` intermittently hit transaction/history-transaction timeout; `report_file_base_info.zip` returned 0 bytes in the files smoke.
 - Prior minute-time negative-volume warnings are gone after parsing the live real-time symbol prefix. Prior multi-market quote bad second symbol is gone after fixing quote parser offset shadowing.
@@ -349,6 +350,7 @@ Remaining validation work:
 - Add a durable performance report artifact after each major parser/client change.
 - Extend report-file fallback and node matrix checks because public `base_info.zip` can return 0 bytes.
 - Keep fund-flow/history-fund-flow in live validation, but treat public-server transaction timeouts as environment-dependent until more host-operation fixtures are collected.
+- Use `tdx-op-matrix -jsonl` for future live failure analysis so host/attempt evidence is preserved instead of only aggregate validation failures.
 
 ## Known Limits
 
@@ -389,6 +391,18 @@ TDX_LIVE=1 go run ./cmd/tdx-fixture-matrix \
 ```
 
 If the exact operation names differ, inspect `diagnostic.DefaultMatrixOperations()` and `cmd/tdx-probe commandFor()` before running.
+
+For host-specific health and light stress testing, prefer:
+
+```bash
+TDX_LIVE=1 go run ./cmd/tdx-op-matrix \
+  -hosts 180.153.18.170:7709,180.153.18.171:7709,115.238.56.198:7709 \
+  -ops security-count,quote,security-list-bj,history-fund-flow,report \
+  -repeats 2 \
+  -operation-timeout 6s \
+  -connect-timeout 1s \
+  -jsonl
+```
 
 Expected outcome:
 
