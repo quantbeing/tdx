@@ -171,12 +171,20 @@ if err != nil {
 }
 defer client.Close()
 
+opClient, hostHealth, err := tdx.FromBestHostByOperations(ctx, tdx.Options{Servers: servers},
+    command.NewSecurityListCommand(model.MarketSH, 0),
+    command.NewSecurityQuotesCommand([]model.Symbol{{Market: model.MarketSH, Code: "600519"}}),
+)
+if err == nil {
+    defer opClient.Close()
+}
+
 err = client.Ping(ctx)
 stats := client.ServerStats()
 opStats := client.OperationStats("security_list")
 ```
 
-`PingAll` 只证明 TCP/setup 可用。某个 host 能 ping 通，不代表它能稳定返回所有 operation。业务系统应优先看 `OperationStats` 和 `Observer` 指标。
+`PingAll` / `FromBestHost` 只证明 TCP/setup 可用。某个 host 能 ping 通，不代表它能稳定返回所有 operation。生产侧如果知道关键路径是证券列表、quote 或 K 线，可以用 `FromBestHostByOperations` 按 operation 探测并选择 host；返回的 `[]tdx.HostHealth` 会保留每个 host 的检查结果、latency 和错误。运行期继续看 `OperationStats`、`Observer` 和 metrics。
 
 ### Securities
 

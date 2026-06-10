@@ -3,8 +3,8 @@
 | Capability | Go v0 | Notes |
 |---|---:|---|
 | TCP setup and response frame decode | yes | Includes zlib and raw frame body validation. |
-| Server seed list and ping | yes | Static seed list plus `PingAll`. |
-| Operation-aware health checks | yes | `HealthCheck` accepts command objects; `OperationStats` exposes per-operation host stats and cooling state. |
+| Server seed list and ping | yes | Static seed list plus `PingAll`; `FromBestHost` selects by setup latency. |
+| Operation-aware health checks | yes | `HealthCheck` accepts command objects; `FromBestHostByOperations` probes each host with caller-selected commands and returns `[]HostHealth`; `OperationStats` exposes per-operation host stats and cooling state. |
 | Request-level host failover | yes | `MaxAttempts` rotates hosts and records stats; operation-aware cooldown skips failing host/operation pairs. Default retry strategy is failover-first; same-host-first is available but not recommended for public nodes. |
 | Operation timeout policy | yes | `TimeoutPolicy`, `OperationMarket`, and `FastTimeoutPolicy()` provide per-operation/per-market deadlines, including a shorter BJ security-list timeout. |
 | Composed API cancellation | yes | Quote batching, security-list paging, transaction aggregation, report/block chunking, and board-member scans check parent context between internal requests and stop without scheduling more work after cancellation. |

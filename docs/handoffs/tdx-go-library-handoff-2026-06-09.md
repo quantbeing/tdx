@@ -143,6 +143,7 @@ Current public API includes:
   - `Ping()`
   - `PingAll()`
   - `FromBestHost()`
+  - `FromBestHostByOperations()`
   - `HealthCheck()`
   - `SetServers()`
   - `ServerStats()`
@@ -197,6 +198,7 @@ Current public API includes:
 
 - Implemented per-host idle connection pool.
 - Implemented request-level host failover.
+- Implemented `FromBestHostByOperations()` and `HostHealth` so callers can choose hosts with operation-specific probes instead of setup-only ping.
 - Implemented explicit retry strategies. Default is failover-first; same-host-first is available for private/transient-failure scenarios.
 - Implemented global host scoring.
 - Implemented operation-aware host stats and cooldown.

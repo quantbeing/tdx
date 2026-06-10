@@ -340,6 +340,46 @@ func FromBestHost(ctx context.Context, opts Options) (*Client, error) {
 	return NewClient(opts), nil
 }
 
+type HostHealth struct {
+	Server  model.Server      `json:"server"`
+	OK      bool              `json:"ok"`
+	Latency time.Duration     `json:"latency"`
+	Checks  []OperationHealth `json:"checks,omitempty"`
+	Error   string            `json:"error,omitempty"`
+}
+
+func FromBestHostByOperations(ctx context.Context, opts Options, probes ...command.Command) (*Client, []HostHealth, error) {
+	servers := opts.Servers
+	if len(servers) == 0 {
+		servers = KnownServers()
+	}
+	if len(probes) == 0 {
+		probes = []command.Command{command.NewSecurityCountCommand(model.MarketSH)}
+	}
+	ch := make(chan HostHealth, len(servers))
+	for _, server := range servers {
+		server := server
+		go func() {
+			ch <- probeHostOperations(ctx, opts, server, probes)
+		}()
+	}
+	health := make([]HostHealth, 0, len(servers))
+	for range servers {
+		health = append(health, <-ch)
+	}
+	sortHostHealth(health)
+	for _, item := range health {
+		if item.OK {
+			opts.Servers = []model.Server{item.Server}
+			return NewClient(opts), health, nil
+		}
+	}
+	if len(opts.Servers) == 0 {
+		opts.Servers = servers
+	}
+	return NewClient(opts), health, errors.New("tdx: no host passed operation health check")
+}
+
 type PingResult struct {
 	Server  model.Server  `json:"server"`
 	Latency time.Duration `json:"latency"`
@@ -450,6 +490,50 @@ func (c *Client) HealthCheck(ctx context.Context, ops ...command.Command) []Oper
 		out = append(out, h)
 	}
 	return out
+}
+
+func probeHostOperations(ctx context.Context, opts Options, server model.Server, probes []command.Command) HostHealth {
+	probeOpts := opts
+	probeOpts.Servers = []model.Server{server}
+	probeOpts.MaxAttempts = 1
+	probeOpts.Pool.Disable = true
+	client := NewClient(probeOpts)
+	defer client.Close()
+
+	start := time.Now()
+	checks := client.HealthCheck(ctx, probes...)
+	health := HostHealth{Server: server, Checks: checks, Latency: time.Since(start), OK: len(checks) > 0}
+	for _, check := range checks {
+		if !check.OK {
+			health.OK = false
+			health.Error = check.Error
+			break
+		}
+	}
+	if len(checks) == 0 {
+		health.Error = "no health checks executed"
+	}
+	return health
+}
+
+func sortHostHealth(health []HostHealth) {
+	for i := 0; i < len(health); i++ {
+		for j := i + 1; j < len(health); j++ {
+			if hostHealthLess(health[j], health[i]) {
+				health[i], health[j] = health[j], health[i]
+			}
+		}
+	}
+}
+
+func hostHealthLess(a HostHealth, b HostHealth) bool {
+	if a.OK != b.OK {
+		return a.OK
+	}
+	if a.Latency != b.Latency {
+		return a.Latency < b.Latency
+	}
+	return a.Server.Addr() < b.Server.Addr()
 }
 
 func (c *Client) Capture(ctx context.Context, cmd command.Command) (CapturedResponse, error) {

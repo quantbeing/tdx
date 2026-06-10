@@ -110,6 +110,66 @@ func TestMetricsCollectorAggregatesRequestEvents(t *testing.T) {
 	}
 }
 
+func TestFromBestHostByOperationsSkipsHostThatFailsProbe(t *testing.T) {
+	opts := Options{
+		Servers: []model.Server{
+			{Name: "bad", Host: "bad", Port: 7709},
+			{Name: "good", Host: "good", Port: 7709},
+		},
+		Dialer: DialerFunc(func(_ context.Context, server model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				switch cmd.Operation() {
+				case "security_list":
+					if server.Name == "bad" {
+						return nil, errors.New("security_list timeout")
+					}
+					return []model.Security{{Market: model.MarketSH, Code: "600519"}}, nil
+				default:
+					t.Fatalf("operation = %s", cmd.Operation())
+				}
+				return nil, nil
+			}), nil
+		}),
+	}
+
+	client, health, err := FromBestHostByOperations(context.Background(), opts, command.NewSecurityListCommand(model.MarketSH, 0))
+	if err != nil {
+		t.Fatalf("FromBestHostByOperations: %v", err)
+	}
+	stats := client.ServerStats()
+	if len(stats) != 1 || stats[0].Server.Name != "good" {
+		t.Fatalf("selected stats = %+v", stats)
+	}
+	if len(health) != 2 || health[0].Server.Name != "good" || !health[0].OK || health[1].Server.Name != "bad" || health[1].OK {
+		t.Fatalf("health = %+v", health)
+	}
+}
+
+func TestFromBestHostByOperationsReturnsHealthWhenAllHostsFail(t *testing.T) {
+	opts := Options{
+		Servers: []model.Server{
+			{Name: "bad1", Host: "bad1", Port: 7709},
+			{Name: "bad2", Host: "bad2", Port: 7709},
+		},
+		Dialer: DialerFunc(func(_ context.Context, server model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				return nil, errors.New(server.Name + " unavailable for " + cmd.Operation())
+			}), nil
+		}),
+	}
+
+	client, health, err := FromBestHostByOperations(context.Background(), opts, command.NewSecurityCountCommand(model.MarketSH))
+	if err == nil {
+		t.Fatal("FromBestHostByOperations unexpectedly succeeded")
+	}
+	if client == nil || len(client.ServerStats()) != 2 {
+		t.Fatalf("fallback client/stats = %#v", client)
+	}
+	if len(health) != 2 || health[0].OK || health[1].OK || health[0].Error == "" || health[1].Error == "" {
+		t.Fatalf("health = %+v", health)
+	}
+}
+
 func TestClientReusesSuccessfulConnectionFromPool(t *testing.T) {
 	var dials int32
 	var closes int32
