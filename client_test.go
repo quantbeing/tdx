@@ -346,6 +346,125 @@ func TestClientSkipsCoolingHostForSameOperation(t *testing.T) {
 	}
 }
 
+func TestClientFailoverFirstHasHigherSuccessRateThanSameHostRetryWhenHostIsDown(t *testing.T) {
+	servers := []model.Server{{Name: "bad", Host: "bad", Port: 7709}, {Name: "good", Host: "good", Port: 7709}}
+	newClient := func(retry RetryOptions) *Client {
+		return NewClient(Options{
+			Servers:     servers,
+			MaxAttempts: 2,
+			Pool:        PoolOptions{Disable: true},
+			Retry:       retry,
+			CircuitBreaker: CircuitBreakerOptions{
+				FailureThreshold: 100,
+				Cooldown:         time.Hour,
+			},
+			Dialer: DialerFunc(func(_ context.Context, server model.Server, _ TransportOptions) (RoundTripper, error) {
+				return roundTripFunc(func(context.Context, command.Command) (any, error) {
+					if server.Name == "bad" {
+						return nil, errors.New("host down")
+					}
+					return uint16(100), nil
+				}), nil
+			}),
+		})
+	}
+
+	failover := newClient(RetryOptions{Strategy: RetryStrategyFailoverFirst})
+	sameHost := newClient(RetryOptions{Strategy: RetryStrategySameHostFirst, SameHostAttempts: 2})
+
+	failoverOK := countSuccessfulPings(t, failover, 6)
+	sameHostOK := countSuccessfulPings(t, sameHost, 6)
+
+	if failoverOK != 6 {
+		t.Fatalf("failover-first successes = %d, want 6", failoverOK)
+	}
+	if sameHostOK >= failoverOK {
+		t.Fatalf("same-host successes = %d, want less than failover %d", sameHostOK, failoverOK)
+	}
+}
+
+func TestClientFailoverFirstCyclesHostsWhenMaxAttemptsExceedsServerCount(t *testing.T) {
+	var hosts []string
+	var perHostCalls = map[string]int{}
+	client := NewClient(Options{
+		Servers:     []model.Server{{Name: "host-a", Host: "a", Port: 7709}, {Name: "host-b", Host: "b", Port: 7709}},
+		MaxAttempts: 3,
+		Pool:        PoolOptions{Disable: true},
+		CircuitBreaker: CircuitBreakerOptions{
+			FailureThreshold: 100,
+			Cooldown:         time.Hour,
+		},
+		Dialer: DialerFunc(func(_ context.Context, server model.Server, _ TransportOptions) (RoundTripper, error) {
+			hosts = append(hosts, server.Name)
+			return roundTripFunc(func(context.Context, command.Command) (any, error) {
+				perHostCalls[server.Name]++
+				if server.Name == "host-a" && perHostCalls[server.Name] == 2 {
+					return uint16(100), nil
+				}
+				return nil, errors.New("temporary operation failure")
+			}), nil
+		}),
+	})
+
+	count, err := client.GetSecurityCount(context.Background(), model.MarketSH)
+	if err != nil {
+		t.Fatalf("GetSecurityCount: %v", err)
+	}
+	if count != 100 {
+		t.Fatalf("count = %d, want 100", count)
+	}
+	if len(hosts) != 3 || hosts[0] != "host-a" || hosts[1] != "host-b" || hosts[2] != "host-a" {
+		t.Fatalf("hosts = %v, want host-a,host-b,host-a", hosts)
+	}
+}
+
+func TestClientAppliesMarketSpecificTimeoutPolicy(t *testing.T) {
+	var seen []time.Duration
+	client := NewClient(Options{
+		Servers: []model.Server{{Name: "fake", Host: "fake", Port: 7709}},
+		Timeout: 10 * time.Second,
+		Transport: TransportOptions{
+			ConnectTimeout: 10 * time.Second,
+			ReadTimeout:    10 * time.Second,
+			WriteTimeout:   10 * time.Second,
+		},
+		TimeoutPolicy: TimeoutPolicy{
+			OperationTimeouts: map[string]time.Duration{
+				"security_list": 3 * time.Second,
+			},
+			MarketOperationTimeouts: map[OperationMarket]time.Duration{
+				{Operation: "security_list", Market: model.MarketBJ}: 1200 * time.Millisecond,
+			},
+		},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(ctx context.Context, cmd command.Command) (any, error) {
+				deadline, ok := ctx.Deadline()
+				if !ok {
+					t.Fatalf("%s missing deadline", cmd.Operation())
+				}
+				seen = append(seen, time.Until(deadline))
+				return []model.Security{}, nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.GetSecurityList(context.Background(), model.MarketBJ, 0); err != nil {
+		t.Fatalf("BJ GetSecurityList: %v", err)
+	}
+	if _, err := client.GetSecurityList(context.Background(), model.MarketSH, 0); err != nil {
+		t.Fatalf("SH GetSecurityList: %v", err)
+	}
+	if len(seen) != 2 {
+		t.Fatalf("seen = %+v", seen)
+	}
+	if seen[0] <= time.Second || seen[0] > 1500*time.Millisecond {
+		t.Fatalf("BJ timeout = %s, want about 1.2s", seen[0])
+	}
+	if seen[1] <= 2500*time.Millisecond || seen[1] > 3500*time.Millisecond {
+		t.Fatalf("SH timeout = %s, want about 3s", seen[1])
+	}
+}
+
 func TestClientCooldownIsOperationAware(t *testing.T) {
 	var hosts []string
 	client := NewClient(Options{
@@ -587,6 +706,17 @@ func bytesOfLen(n int) []byte {
 		out[i] = byte(i)
 	}
 	return out
+}
+
+func countSuccessfulPings(t *testing.T, client *Client, n int) int {
+	t.Helper()
+	var successes int
+	for i := 0; i < n; i++ {
+		if err := client.Ping(context.Background()); err == nil {
+			successes++
+		}
+	}
+	return successes
 }
 
 func tdxSetupActions() []tdxtest.Action {

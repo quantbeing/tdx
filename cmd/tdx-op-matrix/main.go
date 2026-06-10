@@ -96,8 +96,9 @@ func run(args []string, stdout io.Writer, getenv func(string) string, factory di
 			}
 		}
 		return enc.Encode(map[string]any{
-			"summary":     report.Summary,
-			"duration_ms": report.DurationMS,
+			"summary":                 report.Summary,
+			"timeout_recommendations": report.TimeoutRecommendations,
+			"duration_ms":             report.DurationMS,
 		})
 	}
 	return enc.Encode(report)

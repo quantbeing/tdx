@@ -69,9 +69,13 @@ client := tdx.NewClient(tdx.Options{
     Timeout:     8 * time.Second,
     MaxAttempts: 2,
     Transport: tdx.TransportOptions{
-        ConnectTimeout: 5 * time.Second,
+        ConnectTimeout: 800 * time.Millisecond,
         ReadTimeout:    8 * time.Second,
-        WriteTimeout:   5 * time.Second,
+        WriteTimeout:   800 * time.Millisecond,
+    },
+    TimeoutPolicy: tdx.FastTimeoutPolicy(),
+    Retry: tdx.RetryOptions{
+        Strategy: tdx.RetryStrategyFailoverFirst,
     },
     Pool: tdx.PoolOptions{
         MaxIdlePerHost: 2,
@@ -91,11 +95,30 @@ defer client.Close()
 |---|---|
 | `Servers` | 自定义通达信服务器列表；为空时使用 `KnownServers()`。 |
 | `Timeout` | 默认总超时，同时会填充未设置的 connect/read/write timeout。 |
-| `MaxAttempts` | 单次请求最多尝试多少个 host；默认等于 server 数量。 |
+| `MaxAttempts` | 单次请求最多 attempt 次数；默认等于 server 数量。设置得大于 server 数量时，failover-first 会轮询完一轮后继续下一轮。 |
 | `Transport` | TCP connect/read/write timeout。 |
+| `TimeoutPolicy` | 按 operation/market 给 command 包一层更短 deadline；`FastTimeoutPolicy()` 是面向低延迟生产路径的建议值。 |
+| `Retry` | request-level retry 策略。默认 `RetryStrategyFailoverFirst`，失败后先换 host；`RetryStrategySameHostFirst` 只建议用于明确知道错误是瞬时抖动的私有节点。 |
 | `Pool` | per-host idle 连接池。成功连接会复用，失败连接会关闭。 |
 | `CircuitBreaker` | operation-aware 熔断。同一 host 某个 operation 失败进入冷却，不影响该 host 的其他 operation。 |
 | `Observer` | 每次 request attempt 的事件 hook，可接日志、metrics、OpenTelemetry bridge。 |
+
+### Timeout And Retry Policy
+
+公网 TDX 节点的慢耗时通常不是“正常响应慢”，而是 connect/read timeout。2026-06-10 的 operation-host matrix 中，成功请求最大值约 `314ms`，而坏 host connect timeout 约 `1000ms`，BJ `security_list` read timeout 约 `6000ms`。生产路径建议：
+
+| 场景 | 建议值 |
+|---|---:|
+| `Transport.ConnectTimeout` / `WriteTimeout` | `500-800ms` |
+| quote/count/K 线/分时/财务/XDXR | `1-1.5s` |
+| SH/SZ `security_list` 单页 | `1.5-2.5s` |
+| report/block/company/file chunk | `2-3s` |
+| transaction/history 类 | `2-3s` |
+| BJ `security_list` | `800ms-1.5s` 后走 fallback |
+
+`FastTimeoutPolicy()` 已内置这些分档中的保守低延迟版本，并对 `security_list + BJ` 做了更短的 market-specific timeout。
+
+默认 retry 是 failover-first：每次失败后先尝试下一个 host。单元测试覆盖了一个坏 host、一个好 host 的场景，failover-first 在 `MaxAttempts=2` 下 `6/6` 成功；same-host-first 因把两次机会都耗在坏 host 上，成功率更低。same-host-first 适合自建私有节点或明确是瞬时半包/短抖动的场景，公网行情默认不建议开启。
 
 ## Markets And Categories
 
@@ -503,7 +526,7 @@ TDX_LIVE=1 go run ./cmd/tdx-op-matrix \
   -connect-timeout 1s
 ```
 
-`tdx-validate` 常用参数：
+`tdx-op-matrix` 常用参数：
 
 | Flag | 用途 |
 |---|---|
@@ -512,7 +535,9 @@ TDX_LIVE=1 go run ./cmd/tdx-op-matrix \
 | `-repeats 2` | 每个 host/operation 跑几轮，用于小型压测和稳定性抽样。 |
 | `-operation-timeout 6s` | 每个 host/operation 的独立超时。 |
 | `-connect-timeout 1s` | TCP connect/write timeout。 |
-| `-jsonl` | 输出每个 result 一行 JSONL，最后追加 summary 行。 |
+| `-jsonl` | 输出每个 result 一行 JSONL，最后追加 summary 和 `timeout_recommendations`。 |
+
+JSON 报告会包含 `timeout_recommendations`，按每个 host/operation 给出启发式推荐：成功样本使用 `max_latency * 4` 并做上下限夹取；没有成功样本的 timeout 型失败使用 fail-fast 推荐值。这个结果用于调参和观察，不会自动改客户端配置。
 
 2026-06-10 首轮 3 host、5 operation、2 repeats 压测结果：`180.153.18.171:7709` 对所有测试 operation 均 connect timeout；`security-list-bj` 在 `180.153.18.170:7709` 和 `115.238.56.198:7709` 上均 read timeout；`quote` 和 `security-count` 在这两个 host 上成功。因此失败不是同一节点单点问题，而是同时存在坏节点和 BJ list 的 operation/market 级失败。完整表见 [operation-host-matrix-2026-06-10.md](/Users/liuhanqing01/projects/tdx/docs/validation/operation-host-matrix-2026-06-10.md)。
 
@@ -611,6 +636,7 @@ Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
 - `tdx-validate -full-security-list` 已支持全市场分页完整性校验；默认 smoke 为了速度仍只查第 0 页。最新 SH/SZ live baseline 加上 `-security-list-page-retries 1` 后分别拉完 27215/23411 行，若干分页首次失败后重试成功并保留 warning。
 - BJ live baseline 中 `security_count_BJ=345`，但 `security_list_BJ_page_0` 在 15s timeout、3 次 page retry 下仍超时。`tdx-data-probe` 已确认官方 `tdxgp/gpszsh.txt` 与 `gpszsh.local` 可枚举 `319` 个 `gpbj*.dat` 候选，但还不能替代完整 BJ 证券列表。
 - `tdx-op-matrix` 首轮压测显示 `180.153.18.171:7709` 是当前网络下的 host-level failure；但 `security-list-bj` 在可用 host 上也 read timeout，说明 BJ list 不是单一坏节点问题。
+- `tdx-op-matrix` fast-timeout 压测使用 `-operation-timeout 2s -connect-timeout 700ms -repeats 3`，同样 3 host、5 operation，共 45 次 host/operation run，耗时 `24629ms`。成功请求最大 `215ms`；坏 host 约 `701ms` 失败；BJ list 在可用 host 上约 `2001ms` 失败。报告已输出 `timeout_recommendations`。
 - `TDX_LIVE=1 tdx-validate` 含 boards/files：`boards_concept` 返回 270 行，`report_file_base_info.zip` 在当前公网节点返回 0 字节，仍需 fallback/节点矩阵继续反推。
 - 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `34.0 us/op`，minute parser 约 `9.1 us/op`，5000 行 universe validation 约 `244.0 us/op`，80 符号 quote 分片 client benchmark 约 `15.5 us/op`。新增官方数据包 parser benchmark 中，7240 行 manifest 约 `1.72 ms/op`，7240 行 `.local` index 约 `1.31 ms/op`，10858 条 fixed13 raw record 约 `0.31 ms/op`。完整输出记录在 handoff 文档。
 

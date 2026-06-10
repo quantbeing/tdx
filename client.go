@@ -20,9 +20,34 @@ type Options struct {
 	MaxAttempts    int
 	Dialer         Dialer
 	Transport      TransportOptions
+	TimeoutPolicy  TimeoutPolicy
+	Retry          RetryOptions
 	CircuitBreaker CircuitBreakerOptions
 	Pool           PoolOptions
 	Observer       Observer
+}
+
+type RetryStrategy string
+
+const (
+	RetryStrategyFailoverFirst RetryStrategy = "failover_first"
+	RetryStrategySameHostFirst RetryStrategy = "same_host_first"
+)
+
+type RetryOptions struct {
+	Strategy         RetryStrategy
+	SameHostAttempts int
+}
+
+type OperationMarket struct {
+	Operation string
+	Market    model.Market
+}
+
+type TimeoutPolicy struct {
+	DefaultTimeout          time.Duration
+	OperationTimeouts       map[string]time.Duration
+	MarketOperationTimeouts map[OperationMarket]time.Duration
 }
 
 type TransportOptions struct {
@@ -77,20 +102,22 @@ type CapturedResponse struct {
 }
 
 type Client struct {
-	mu              sync.Mutex
-	servers         []model.Server
-	stats           []model.ServerStat
-	opStats         map[string][]model.ServerStat
-	opFailures      map[string][]int
-	opCoolUntil     map[string][]time.Time
-	idle            [][]RoundTripper
-	next            int
-	dialer          Dialer
-	opts            Options
-	attempts        int
-	breakerFailure  int
-	breakerCooldown time.Duration
-	maxIdlePerHost  int
+	mu               sync.Mutex
+	servers          []model.Server
+	stats            []model.ServerStat
+	opStats          map[string][]model.ServerStat
+	opFailures       map[string][]int
+	opCoolUntil      map[string][]time.Time
+	idle             [][]RoundTripper
+	next             int
+	dialer           Dialer
+	opts             Options
+	attempts         int
+	breakerFailure   int
+	breakerCooldown  time.Duration
+	maxIdlePerHost   int
+	retryStrategy    RetryStrategy
+	sameHostAttempts int
 }
 
 func NewClient(opts Options) *Client {
@@ -109,6 +136,7 @@ func NewClient(opts Options) *Client {
 	if opts.Dialer == nil {
 		opts.Dialer = NetDialer{}
 	}
+	opts.Retry = normalizeRetryOptions(opts.Retry)
 	breakerFailure := opts.CircuitBreaker.FailureThreshold
 	if breakerFailure <= 0 {
 		breakerFailure = 3
@@ -127,7 +155,7 @@ func NewClient(opts Options) *Client {
 		opts.Servers = KnownServers()
 	}
 	attempts := opts.MaxAttempts
-	if attempts <= 0 || attempts > len(opts.Servers) {
+	if attempts <= 0 {
 		attempts = len(opts.Servers)
 	}
 	stats := make([]model.ServerStat, len(opts.Servers))
@@ -135,19 +163,113 @@ func NewClient(opts Options) *Client {
 		stats[i] = model.ServerStat{Server: s, Score: 1}
 	}
 	return &Client{
-		servers:         append([]model.Server(nil), opts.Servers...),
-		stats:           stats,
-		opStats:         make(map[string][]model.ServerStat),
-		opFailures:      make(map[string][]int),
-		opCoolUntil:     make(map[string][]time.Time),
-		idle:            make([][]RoundTripper, len(opts.Servers)),
-		dialer:          opts.Dialer,
-		opts:            opts,
-		attempts:        attempts,
-		breakerFailure:  breakerFailure,
-		breakerCooldown: breakerCooldown,
-		maxIdlePerHost:  maxIdlePerHost,
+		servers:          append([]model.Server(nil), opts.Servers...),
+		stats:            stats,
+		opStats:          make(map[string][]model.ServerStat),
+		opFailures:       make(map[string][]int),
+		opCoolUntil:      make(map[string][]time.Time),
+		idle:             make([][]RoundTripper, len(opts.Servers)),
+		dialer:           opts.Dialer,
+		opts:             opts,
+		attempts:         attempts,
+		breakerFailure:   breakerFailure,
+		breakerCooldown:  breakerCooldown,
+		maxIdlePerHost:   maxIdlePerHost,
+		retryStrategy:    opts.Retry.Strategy,
+		sameHostAttempts: opts.Retry.SameHostAttempts,
 	}
+}
+
+func normalizeRetryOptions(opts RetryOptions) RetryOptions {
+	if opts.Strategy == "" {
+		opts.Strategy = RetryStrategyFailoverFirst
+	}
+	if opts.Strategy != RetryStrategySameHostFirst {
+		opts.Strategy = RetryStrategyFailoverFirst
+	}
+	if opts.SameHostAttempts <= 0 {
+		opts.SameHostAttempts = 1
+	}
+	if opts.Strategy == RetryStrategyFailoverFirst {
+		opts.SameHostAttempts = 1
+	}
+	return opts
+}
+
+func FastTimeoutPolicy() TimeoutPolicy {
+	return TimeoutPolicy{
+		DefaultTimeout: 1500 * time.Millisecond,
+		OperationTimeouts: map[string]time.Duration{
+			"security_count":        time.Second,
+			"security_quotes":       time.Second,
+			"security_bars":         1500 * time.Millisecond,
+			"index_bars":            1500 * time.Millisecond,
+			"security_list":         2 * time.Second,
+			"minute_time":           1500 * time.Millisecond,
+			"history_minute_time":   2 * time.Second,
+			"transaction":           2500 * time.Millisecond,
+			"history_transaction":   3 * time.Second,
+			"history_fund_flow":     3 * time.Second,
+			"finance_info":          1500 * time.Millisecond,
+			"xdxr_info":             1500 * time.Millisecond,
+			"company_info_category": 2 * time.Second,
+			"company_info_content":  2 * time.Second,
+			"block_info_meta":       2 * time.Second,
+			"block_info":            3 * time.Second,
+			"report_file":           3 * time.Second,
+		},
+		MarketOperationTimeouts: map[OperationMarket]time.Duration{
+			{Operation: "security_list", Market: model.MarketBJ}: 1200 * time.Millisecond,
+		},
+	}
+}
+
+func (p TimeoutPolicy) TimeoutFor(cmd command.Command) time.Duration {
+	if cmd == nil {
+		return p.DefaultTimeout
+	}
+	operation := cmd.Operation()
+	if market, ok := commandMarket(cmd); ok && p.MarketOperationTimeouts != nil {
+		if timeout := p.MarketOperationTimeouts[OperationMarket{Operation: operation, Market: market}]; timeout > 0 {
+			return timeout
+		}
+	}
+	if p.OperationTimeouts != nil {
+		if timeout := p.OperationTimeouts[operation]; timeout > 0 {
+			return timeout
+		}
+	}
+	return p.DefaultTimeout
+}
+
+func commandMarket(cmd command.Command) (model.Market, bool) {
+	switch c := cmd.(type) {
+	case command.SecurityCountCommand:
+		return c.Market, true
+	case command.SecurityListCommand:
+		return c.Market, true
+	case command.SecurityQuotesCommand:
+		if len(c.Symbols) == 1 {
+			return c.Symbols[0].Market, true
+		}
+	case command.BarsCommand:
+		return c.Market, true
+	case command.MinuteTimeDataCommand:
+		return c.Market, true
+	case command.TransactionDataCommand:
+		return c.Market, true
+	case command.HistoryFundFlowCommand:
+		return c.Market, true
+	case command.FinanceInfoCommand:
+		return c.Market, true
+	case command.XdxrInfoCommand:
+		return c.Market, true
+	case command.CompanyInfoCategoryCommand:
+		return c.Market, true
+	case command.CompanyInfoContentCommand:
+		return c.Market, true
+	}
+	return 0, false
 }
 
 func KnownServers() []model.Server {
@@ -241,7 +363,7 @@ func (c *Client) SetServers(servers []model.Server) {
 	c.opCoolUntil = make(map[string][]time.Time)
 	c.idle = make([][]RoundTripper, len(servers))
 	c.next = 0
-	if c.opts.MaxAttempts <= 0 || c.opts.MaxAttempts > len(servers) {
+	if c.opts.MaxAttempts <= 0 {
 		c.attempts = len(servers)
 	} else {
 		c.attempts = c.opts.MaxAttempts
@@ -291,10 +413,13 @@ func (c *Client) Capture(ctx context.Context, cmd command.Command) (CapturedResp
 	if attempts <= 0 {
 		attempts = 1
 	}
+	var plan retryAttemptPlan
 	for attempt := 0; attempt < attempts; attempt++ {
-		idx, server := c.pickServer(cmd.Operation())
-		rt, reused, err := c.acquire(ctx, idx, server)
+		attemptCtx, cancel := c.contextForCommand(ctx, cmd)
+		idx, server := c.pickAttemptServer(cmd.Operation(), &plan)
+		rt, reused, err := c.acquire(attemptCtx, idx, server)
 		if err != nil {
+			cancel()
 			lastErr = err
 			c.report(idx, cmd.Operation(), err, 0)
 			c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: false, Error: err.Error()})
@@ -302,6 +427,7 @@ func (c *Client) Capture(ctx context.Context, cmd command.Command) (CapturedResp
 		}
 		rawRT, ok := rt.(RawRoundTripper)
 		if !ok {
+			cancel()
 			c.release(idx, rt, false)
 			err := fmt.Errorf("tdx round tripper for %s does not support capture", server.Addr())
 			lastErr = err
@@ -310,15 +436,17 @@ func (c *Client) Capture(ctx context.Context, cmd command.Command) (CapturedResp
 			continue
 		}
 		start := time.Now()
-		out, err := rawRT.RoundTripRaw(ctx, cmd)
+		out, err := rawRT.RoundTripRaw(attemptCtx, cmd)
 		latency := time.Since(start)
 		if err != nil {
+			cancel()
 			c.release(idx, rt, false)
 			lastErr = fmt.Errorf("%s capture via %s attempt %d: %w", cmd.Operation(), server.Addr(), attempt+1, err)
 			c.report(idx, cmd.Operation(), err, latency)
 			c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: false, Error: err.Error(), Latency: latency, Reused: reused})
 			continue
 		}
+		cancel()
 		c.release(idx, rt, true)
 		out.Operation = cmd.Operation()
 		out.Server = server
@@ -797,18 +925,22 @@ func (c *Client) execute(ctx context.Context, cmd command.Command) (any, error) 
 	if attempts <= 0 {
 		attempts = 1
 	}
+	var plan retryAttemptPlan
 	for attempt := 0; attempt < attempts; attempt++ {
-		idx, server := c.pickServer(cmd.Operation())
-		rt, reused, err := c.acquire(ctx, idx, server)
+		attemptCtx, cancel := c.contextForCommand(ctx, cmd)
+		idx, server := c.pickAttemptServer(cmd.Operation(), &plan)
+		rt, reused, err := c.acquire(attemptCtx, idx, server)
 		if err != nil {
+			cancel()
 			lastErr = err
 			c.report(idx, cmd.Operation(), err, 0)
 			c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: false, Error: err.Error()})
 			continue
 		}
 		start := time.Now()
-		out, err := rt.RoundTrip(ctx, cmd)
+		out, err := rt.RoundTrip(attemptCtx, cmd)
 		if err != nil {
+			cancel()
 			latency := time.Since(start)
 			c.release(idx, rt, false)
 			lastErr = fmt.Errorf("%s via %s attempt %d: %w", cmd.Operation(), server.Addr(), attempt+1, err)
@@ -816,6 +948,7 @@ func (c *Client) execute(ctx context.Context, cmd command.Command) (any, error) 
 			c.observe(RequestEvent{Operation: cmd.Operation(), Server: server, Attempt: attempt + 1, OK: false, Error: err.Error(), Latency: latency, Reused: reused})
 			continue
 		}
+		cancel()
 		c.release(idx, rt, true)
 		latency := time.Since(start)
 		c.report(idx, cmd.Operation(), nil, latency)
@@ -881,6 +1014,31 @@ func (c *Client) drainIdle() []RoundTripper {
 	return out
 }
 
+type retryAttemptPlan struct {
+	idx       int
+	server    model.Server
+	remaining int
+	ok        bool
+}
+
+func (c *Client) pickAttemptServer(op string, plan *retryAttemptPlan) (int, model.Server) {
+	if c.retryStrategy == RetryStrategySameHostFirst && c.sameHostAttempts > 1 {
+		if plan != nil && plan.ok && plan.remaining > 0 {
+			plan.remaining--
+			return plan.idx, plan.server
+		}
+		idx, server := c.pickServer(op)
+		if plan != nil {
+			plan.idx = idx
+			plan.server = server
+			plan.remaining = c.sameHostAttempts - 1
+			plan.ok = true
+		}
+		return idx, server
+	}
+	return c.pickServer(op)
+}
+
 func (c *Client) pickServer(op string) (int, model.Server) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -900,6 +1058,17 @@ func (c *Client) pickServer(op string) (int, model.Server) {
 	}
 	c.next = (firstIdx + 1) % len(c.servers)
 	return firstIdx, c.servers[firstIdx]
+}
+
+func (c *Client) contextForCommand(ctx context.Context, cmd command.Command) (context.Context, context.CancelFunc) {
+	timeout := c.opts.TimeoutPolicy.TimeoutFor(cmd)
+	if timeout <= 0 {
+		return ctx, func() {}
+	}
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= timeout {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, timeout)
 }
 
 func (c *Client) report(idx int, op string, err error, latency time.Duration) {

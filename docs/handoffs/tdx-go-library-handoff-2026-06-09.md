@@ -185,8 +185,10 @@ Current public API includes:
 
 - Implemented per-host idle connection pool.
 - Implemented request-level host failover.
+- Implemented explicit retry strategies. Default is failover-first; same-host-first is available for private/transient-failure scenarios.
 - Implemented global host scoring.
 - Implemented operation-aware host stats and cooldown.
+- Implemented `TimeoutPolicy`, `OperationMarket`, and `FastTimeoutPolicy()` for per-operation/per-market fail-fast deadlines.
 - Implemented `KeepAliveManager` for repeated heartbeat failure handling.
 - Implemented `Observer` hook and `ObserverFunc`.
 - Implemented `NewMetricsCollector()` to aggregate per-operation/per-host attempts, successes, failures, latency, row counts, and last error.
@@ -290,6 +292,8 @@ Latest live runs in this environment, on 2026-06-09 around 21:04-21:06 Asia/Shan
 - The `dat13` summary now includes marker counts, sorted marker-group summaries, date-like min/max, float32-like min/max, and non-zero field2 count. For `gpbj920021.dat`, min/max date-like was `0/20260609`, field1 range was about `-1820.42/502124.97`, and field2 was non-zero in `3048` rows.
 - Useful marker-group clues in `gpbj920021.dat`: marker `1` has 33 rows and field2 always zero; markers `3/11/12/13` each have 804 rows and the same date range `20230213..20260608`; marker `27` has 1483 rows and field2 is non-zero in every row. Treat these as row classes to reverse engineer separately.
 - 2026-06-10 operation-host matrix added `tdx-op-matrix`. First controlled stress run used 3 hosts, 5 operations, and 2 repeats each, for 30 host/operation runs in 36705 ms. `180.153.18.171:7709` failed every tested operation with connect timeout. `security-list-bj` also failed on `180.153.18.170:7709` and `115.238.56.198:7709` with read timeout while quote/count succeeded there. So failures are not one-node-only: there is at least one bad host plus a BJ list operation/market failure.
+- 2026-06-10 timeout-risk policy added `TimeoutPolicy`, `FastTimeoutPolicy()`, explicit retry strategies, and op-matrix timeout recommendations. Existing evidence showed successful operations maxed at about 314 ms in the sampled run, while wasted time came from 1s connect timeout and 6s BJ read timeout. Regression tests show failover-first has higher success rate than same-host-first when the first host is down and `MaxAttempts=2`.
+- 2026-06-10 fast-timeout live matrix used `-operation-timeout 2s -connect-timeout 700ms -repeats 3` across the same 3 hosts and 5 operations. It completed 45 host/operation runs in 24629 ms. Successful operations maxed at 215 ms. The dead host failed around 701 ms, and BJ security-list failed around 2001 ms on otherwise usable hosts. `tdx-op-matrix` recommended mostly 500 ms for successful ordinary operations, about 701 ms for the dead host, 860 ms for the slower report host, and 1500 ms for BJ list fail-fast.
 - Passed across these runs: SH/SZ count and first security-list pages, single-symbol quote, multi-market quote, day bars, minute-time structural check, transaction page when public server responded, market stat, finance, XDXR, company category, and `boards_concept` with 270 rows.
 - Failed due current public-server behavior: `fund_flow_SH_600519` and `history_fund_flow_SH_600519` intermittently hit transaction/history-transaction timeout; `report_file_base_info.zip` returned 0 bytes in the files smoke.
 - Prior minute-time negative-volume warnings are gone after parsing the live real-time symbol prefix. Prior multi-market quote bad second symbol is gone after fixing quote parser offset shadowing.

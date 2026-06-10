@@ -18,11 +18,12 @@ type OperationMatrixClient interface {
 type OperationMatrixClientFactory func(model.Server, tdx.Observer) OperationMatrixClient
 
 type OperationMatrixOptions struct {
-	Servers             []model.Server
-	Operations          []MatrixOperation
-	Repeats             int
-	PerOperationTimeout time.Duration
-	NewClient           OperationMatrixClientFactory
+	Servers               []model.Server
+	Operations            []MatrixOperation
+	Repeats               int
+	PerOperationTimeout   time.Duration
+	TimeoutRecommendation TimeoutRecommendationOptions
+	NewClient             OperationMatrixClientFactory
 }
 
 type OperationMatrixAttempt struct {
@@ -64,11 +65,31 @@ type OperationMatrixSummary struct {
 }
 
 type OperationMatrixReport struct {
-	StartedAt  time.Time                `json:"started_at"`
-	FinishedAt time.Time                `json:"finished_at"`
-	DurationMS int64                    `json:"duration_ms"`
-	Results    []OperationMatrixResult  `json:"results"`
-	Summary    []OperationMatrixSummary `json:"summary"`
+	StartedAt              time.Time                `json:"started_at"`
+	FinishedAt             time.Time                `json:"finished_at"`
+	DurationMS             int64                    `json:"duration_ms"`
+	Results                []OperationMatrixResult  `json:"results"`
+	Summary                []OperationMatrixSummary `json:"summary"`
+	TimeoutRecommendations []TimeoutRecommendation  `json:"timeout_recommendations,omitempty"`
+}
+
+type TimeoutRecommendationOptions struct {
+	MinTimeout         time.Duration
+	MaxTimeout         time.Duration
+	SuccessMultiplier  float64
+	FailureFastTimeout time.Duration
+}
+
+type TimeoutRecommendation struct {
+	Name                 string       `json:"name"`
+	Operation            string       `json:"operation"`
+	Server               model.Server `json:"server"`
+	Runs                 int          `json:"runs"`
+	Successes            int          `json:"successes"`
+	Failures             int          `json:"failures"`
+	MaxObservedLatencyMS int64        `json:"max_observed_latency_ms"`
+	RecommendedTimeoutMS int64        `json:"recommended_timeout_ms"`
+	Reason               string       `json:"reason"`
 }
 
 type operationMatrixClientError struct {
@@ -97,6 +118,7 @@ func RunOperationMatrix(ctx context.Context, opts OperationMatrixOptions) Operat
 	report.FinishedAt = time.Now()
 	report.DurationMS = report.FinishedAt.Sub(report.StartedAt).Milliseconds()
 	report.Summary = summarizeOperationMatrix(report.Results)
+	report.TimeoutRecommendations = RecommendOperationTimeouts(report.Summary, opts.TimeoutRecommendation)
 	return report
 }
 
@@ -231,4 +253,64 @@ func summarizeOperationMatrix(results []OperationMatrixResult) []OperationMatrix
 		return out[i].Server.Addr() < out[j].Server.Addr()
 	})
 	return out
+}
+
+func RecommendOperationTimeouts(summaries []OperationMatrixSummary, opts TimeoutRecommendationOptions) []TimeoutRecommendation {
+	opts = normalizeTimeoutRecommendationOptions(opts)
+	out := make([]TimeoutRecommendation, 0, len(summaries))
+	for _, summary := range summaries {
+		timeout := opts.FailureFastTimeout
+		reason := "no_success_fail_fast"
+		if summary.Successes > 0 {
+			timeout = time.Duration(float64(time.Duration(summary.MaxLatencyMS)*time.Millisecond) * opts.SuccessMultiplier)
+			timeout = clampDuration(timeout, opts.MinTimeout, opts.MaxTimeout)
+			reason = "observed_success_latency"
+		} else {
+			if summary.MaxLatencyMS > 0 {
+				observed := time.Duration(summary.MaxLatencyMS) * time.Millisecond
+				if observed < timeout {
+					timeout = observed
+				}
+			}
+			timeout = clampDuration(timeout, opts.MinTimeout, opts.MaxTimeout)
+		}
+		out = append(out, TimeoutRecommendation{
+			Name:                 summary.Name,
+			Operation:            summary.Operation,
+			Server:               summary.Server,
+			Runs:                 summary.Runs,
+			Successes:            summary.Successes,
+			Failures:             summary.Failures,
+			MaxObservedLatencyMS: summary.MaxLatencyMS,
+			RecommendedTimeoutMS: timeout.Milliseconds(),
+			Reason:               reason,
+		})
+	}
+	return out
+}
+
+func normalizeTimeoutRecommendationOptions(opts TimeoutRecommendationOptions) TimeoutRecommendationOptions {
+	if opts.MinTimeout <= 0 {
+		opts.MinTimeout = 500 * time.Millisecond
+	}
+	if opts.MaxTimeout <= 0 {
+		opts.MaxTimeout = 3 * time.Second
+	}
+	if opts.SuccessMultiplier <= 0 {
+		opts.SuccessMultiplier = 4
+	}
+	if opts.FailureFastTimeout <= 0 {
+		opts.FailureFastTimeout = 1500 * time.Millisecond
+	}
+	return opts
+}
+
+func clampDuration(value time.Duration, min time.Duration, max time.Duration) time.Duration {
+	if min > 0 && value < min {
+		return min
+	}
+	if max > 0 && value > max {
+		return max
+	}
+	return value
 }

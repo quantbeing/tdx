@@ -113,3 +113,57 @@ func TestRunOperationMatrixRecordsClientFactoryError(t *testing.T) {
 		t.Fatalf("summary = %+v", report.Summary)
 	}
 }
+
+func TestRunOperationMatrixAddsTimeoutRecommendations(t *testing.T) {
+	report := RunOperationMatrix(context.Background(), OperationMatrixOptions{
+		Servers: []model.Server{
+			{Name: "fast", Host: "127.0.0.1", Port: 7709},
+			{Name: "timeout", Host: "127.0.0.2", Port: 7709},
+		},
+		Operations:          []MatrixOperation{{Name: "count", Command: command.NewSecurityCountCommand(model.MarketSH)}},
+		Repeats:             1,
+		PerOperationTimeout: 5 * time.Second,
+		TimeoutRecommendation: TimeoutRecommendationOptions{
+			MinTimeout:         500 * time.Millisecond,
+			MaxTimeout:         2 * time.Second,
+			SuccessMultiplier:  4,
+			FailureFastTimeout: 1200 * time.Millisecond,
+		},
+		NewClient: func(server model.Server, observer tdx.Observer) OperationMatrixClient {
+			return &fakeMatrixClient{
+				server:   server,
+				observer: observer,
+				fail:     server.Name == "timeout",
+			}
+		},
+	})
+
+	if len(report.TimeoutRecommendations) != 2 {
+		t.Fatalf("recommendations = %+v", report.TimeoutRecommendations)
+	}
+	if report.TimeoutRecommendations[0].RecommendedTimeoutMS != 500 || report.TimeoutRecommendations[0].Reason != "observed_success_latency" {
+		t.Fatalf("success recommendation = %+v", report.TimeoutRecommendations[0])
+	}
+	if report.TimeoutRecommendations[1].RecommendedTimeoutMS != 500 || report.TimeoutRecommendations[1].Reason != "no_success_fail_fast" {
+		t.Fatalf("failure recommendation = %+v", report.TimeoutRecommendations[1])
+	}
+}
+
+func TestRecommendOperationTimeoutsUsesFailureFastForSlowFailures(t *testing.T) {
+	recs := RecommendOperationTimeouts([]OperationMatrixSummary{{
+		Name:         "security-list-bj",
+		Operation:    "security_list",
+		Server:       model.Server{Host: "127.0.0.1", Port: 7709},
+		Runs:         2,
+		Failures:     2,
+		MaxLatencyMS: 2001,
+	}}, TimeoutRecommendationOptions{
+		MinTimeout:         500 * time.Millisecond,
+		MaxTimeout:         3 * time.Second,
+		FailureFastTimeout: 1200 * time.Millisecond,
+	})
+
+	if len(recs) != 1 || recs[0].RecommendedTimeoutMS != 1200 {
+		t.Fatalf("recommendations = %+v", recs)
+	}
+}
