@@ -74,6 +74,21 @@ var (
 	errPageBudgetExceeded  = errors.New("tdx page budget exceeded")
 )
 
+// IsChunkBudgetError reports whether err was caused by a chunk budget limit.
+func IsChunkBudgetError(err error) bool {
+	return errors.Is(err, errChunkBudgetExceeded)
+}
+
+// IsPageBudgetError reports whether err was caused by a pagination budget limit.
+func IsPageBudgetError(err error) bool {
+	return errors.Is(err, errPageBudgetExceeded)
+}
+
+// IsBudgetError reports whether err was caused by any explicit caller budget.
+func IsBudgetError(err error) bool {
+	return IsChunkBudgetError(err) || IsPageBudgetError(err)
+}
+
 type ListSecuritiesOptions struct {
 	Markets           []model.Market
 	MaxPagesPerMarket int

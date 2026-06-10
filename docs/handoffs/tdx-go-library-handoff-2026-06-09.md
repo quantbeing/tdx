@@ -148,6 +148,9 @@ Current public API includes:
   - `ServerStats()`
   - `OperationStats()`
   - `Capture()`
+  - `IsBudgetError()`
+  - `IsChunkBudgetError()`
+  - `IsPageBudgetError()`
 - Securities:
   - `GetSecurityCount()`
   - `GetSecurityList()`
@@ -202,6 +205,7 @@ Current public API includes:
 - Implemented explicit pagination/chunk budgets for fund-flow and server-file helpers:
   - `GetFundFlowWithOptions()` / `GetHistoryFundFlowWithOptions()` return a `page budget` error when transaction aggregation exceeds caller budget.
   - `GetBlockInfoWithOptions()` / `GetReportFileWithOptions()` / `ListBoardsWithOptions()` / `ListBoardMembersWithOptions()` return a `chunk budget` error instead of silent truncation.
+  - `IsBudgetError()` / `IsChunkBudgetError()` / `IsPageBudgetError()` let callers branch without string matching.
 - Implemented `KeepAliveManager` for repeated heartbeat failure handling.
 - Implemented TCP setup deadline and setup frame error checking.
 - Implemented `Observer` hook and `ObserverFunc`.

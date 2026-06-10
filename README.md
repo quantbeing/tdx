@@ -302,6 +302,10 @@ historyFlow, err := client.GetHistoryFundFlow(ctx, model.MarketSH, "600519", 0, 
 - `GetFundFlowWithOptions` / `GetHistoryFundFlowWithOptions` 可设置 `PageSize`、`MaxStart`、`MaxPages`。达到页数预算会返回包含 `page budget` 的错误，避免长时间等待或静默截断。
 
 ```go
+if tdx.IsPageBudgetError(err) {
+    // 可换 host、降低业务级别，或把完整聚合放到后台任务。
+}
+
 fmt.Println(flow.MainNetInflow())
 fmt.Println(flow.TotalNetInflow())
 ```
@@ -352,6 +356,14 @@ sampleZip, err := client.GetReportFileWithOptions(ctx, "base_info.zip", tdx.File
 `GetBlockInfo` 会先读 metadata，再按 chunk 拉取板块文件并解析 `.dat`。`GetReportFile` 会按 chunk 拉取服务端文件，直到短 chunk。
 
 `GetBlockInfoWithOptions`、`GetReportFileWithOptions`、`ListBoardsWithOptions`、`ListBoardMembersWithOptions` 可设置 `ChunkSize` 和 `MaxChunks`。达到 chunk 预算会返回包含 `chunk budget` 的错误，调用方可以据此选择缩短等待、换 host 或发起后台补全任务。`ChunkSize` 默认并限制为不超过 `tdx.DefaultFileChunkSize`。
+
+```go
+if tdx.IsChunkBudgetError(err) {
+    // 当前调用触发了显式预算，不代表协议或 host 一定不可用。
+}
+```
+
+需要统一处理所有预算类错误时可用 `tdx.IsBudgetError(err)`。
 
 ### Raw Capture For Protocol Auditing
 

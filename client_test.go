@@ -831,6 +831,53 @@ func TestClientListBoardMembersWithOptionsReportsChunkBudget(t *testing.T) {
 	}
 }
 
+func TestBudgetErrorHelpersClassifyBudgetErrors(t *testing.T) {
+	reportClient := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				if cmd.Operation() != "report_file" {
+					t.Fatalf("operation = %s, want report_file", cmd.Operation())
+				}
+				return bytesOfLen(DefaultFileChunkSize), nil
+			}), nil
+		}),
+	})
+	_, chunkErr := reportClient.GetReportFileWithOptions(context.Background(), "base_info.zip", FileFetchOptions{MaxChunks: 1})
+	if !IsChunkBudgetError(chunkErr) || !IsBudgetError(chunkErr) {
+		t.Fatalf("chunk budget classification failed: %v", chunkErr)
+	}
+	if IsPageBudgetError(chunkErr) {
+		t.Fatalf("chunk error classified as page budget: %v", chunkErr)
+	}
+
+	records := make([]model.Transaction, 100)
+	for i := range records {
+		records[i] = model.Transaction{Hour: 9, Minute: 30 + i, Price: model.NewDecimal(1000, 2), Vol: 100, BuyOrSell: 0}
+	}
+	flowClient := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				if cmd.Operation() != "transaction" {
+					t.Fatalf("operation = %s, want transaction", cmd.Operation())
+				}
+				return records, nil
+			}), nil
+		}),
+	})
+	_, pageErr := flowClient.GetFundFlowWithOptions(context.Background(), model.MarketSH, "600519", FundFlowOptions{MaxPages: 1})
+	if !IsPageBudgetError(pageErr) || !IsBudgetError(pageErr) {
+		t.Fatalf("page budget classification failed: %v", pageErr)
+	}
+	if IsChunkBudgetError(pageErr) {
+		t.Fatalf("page error classified as chunk budget: %v", pageErr)
+	}
+	if IsBudgetError(context.Canceled) || IsChunkBudgetError(nil) || IsPageBudgetError(nil) {
+		t.Fatalf("non-budget errors were classified as budget errors")
+	}
+}
+
 func TestClientGetMarketStatFrom880005Quote(t *testing.T) {
 	client := NewClient(Options{
 		Servers: []model.Server{{Host: "good", Port: 7709}},
