@@ -150,10 +150,10 @@ These APIs perform routing, batching, pagination, or chunking:
 | `GetSecurityQuotes` | splits symbols into batches of at most `80` |
 | `ListSecurities` | per market: count, then `security_list` pages of `1000` |
 | `ListAShares` | `ListSecurities(SH,SZ,BJ)` plus A-share code filtering |
-| `GetBlockInfo` | file meta, chunk fetch, then local `.dat` parse |
-| `GetReportFile` | repeated `report_file` chunks until short chunk or limit |
-| `ListBoards` | maps board type to block file and calls `GetBlockInfo` |
-| `ListBoardMembers` | searches concept/style/index block files |
+| `GetBlockInfo` / `GetBlockInfoWithOptions` | file meta, chunk fetch, then local `.dat` parse; options can cap chunk budget |
+| `GetReportFile` / `GetReportFileWithOptions` | repeated `report_file` chunks until short chunk; options can cap chunk budget |
+| `ListBoards` / `ListBoardsWithOptions` | maps board type to block file and calls `GetBlockInfo` |
+| `ListBoardMembers` / `ListBoardMembersWithOptions` | searches concept/style/index block files |
 
 ### Aggregated/Derived APIs
 
@@ -162,8 +162,8 @@ These APIs calculate business models from raw responses:
 | API | Aggregation |
 |---|---|
 | `GetMarketStat` | quote `880005` mapped to up/down/neutral/suspended totals |
-| `GetFundFlow` | transaction pagination, de-duplication, and amount-bucket classification |
-| `GetHistoryFundFlow` | direct history fund-flow first; if empty, day bars plus historical transactions, then amount-bucket classification |
+| `GetFundFlow` / `GetFundFlowWithOptions` | transaction pagination, de-duplication, and amount-bucket classification; options can cap page budget |
+| `GetHistoryFundFlow` / `GetHistoryFundFlowWithOptions` | direct history fund-flow first; if empty, day bars plus historical transactions, then amount-bucket classification; options can cap fallback page budget |
 
 ## Current Interpretation
 

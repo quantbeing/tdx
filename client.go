@@ -69,10 +69,28 @@ type CircuitBreakerOptions struct {
 const DefaultFileChunkSize = 30000
 const MaxFileChunks = 256
 
+var (
+	errChunkBudgetExceeded = errors.New("tdx chunk budget exceeded")
+	errPageBudgetExceeded  = errors.New("tdx page budget exceeded")
+)
+
 type ListSecuritiesOptions struct {
 	Markets           []model.Market
 	MaxPagesPerMarket int
 	StopOnError       bool
+}
+
+// FileFetchOptions bounds chunked server file reads.
+type FileFetchOptions struct {
+	ChunkSize int
+	MaxChunks int
+}
+
+// FundFlowOptions bounds transaction pagination used by fund-flow helpers.
+type FundFlowOptions struct {
+	PageSize int
+	MaxStart int
+	MaxPages int
 }
 
 type Dialer interface {
@@ -703,15 +721,25 @@ func (c *Client) GetMarketStat(ctx context.Context) (model.MarketStat, error) {
 	}, nil
 }
 func (c *Client) GetFundFlow(ctx context.Context, market model.Market, code string) (model.FundFlow, error) {
+	return c.GetFundFlowWithOptions(ctx, market, code, FundFlowOptions{})
+}
+
+func (c *Client) GetFundFlowWithOptions(ctx context.Context, market model.Market, code string, opts FundFlowOptions) (model.FundFlow, error) {
+	opts = normalizeFundFlowOptions(opts, 2000)
 	records, err := c.collectTransactionRecords(ctx, func(start int, count int) ([]model.Transaction, error) {
 		return c.GetTransactionData(ctx, market, code, start, count)
-	}, 2000, 10000)
+	}, opts)
 	if err != nil {
 		return model.FundFlow{}, err
 	}
 	return classifyFundFlow(records), nil
 }
 func (c *Client) GetHistoryFundFlow(ctx context.Context, market model.Market, code string, start int, count int) ([]model.HistoricalFundFlow, error) {
+	return c.GetHistoryFundFlowWithOptions(ctx, market, code, start, count, FundFlowOptions{})
+}
+
+func (c *Client) GetHistoryFundFlowWithOptions(ctx context.Context, market model.Market, code string, start int, count int, opts FundFlowOptions) ([]model.HistoricalFundFlow, error) {
+	opts = normalizeFundFlowOptions(opts, 800)
 	got, err := c.execute(ctx, command.NewHistoryFundFlowCommand(market, code, start, count))
 	if err == nil {
 		if rows, ok := got.([]model.HistoricalFundFlow); ok && len(rows) > 0 {
@@ -732,7 +760,7 @@ func (c *Client) GetHistoryFundFlow(ctx context.Context, market model.Market, co
 		date := bar.Year*10000 + bar.Month*100 + bar.Day
 		records, err := c.collectTransactionRecords(ctx, func(pageStart int, pageSize int) ([]model.Transaction, error) {
 			return c.GetHistoryTransactionData(ctx, market, code, date, pageStart, pageSize)
-		}, 800, 10000)
+		}, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -790,6 +818,11 @@ func (c *Client) GetCompanyInfoContent(ctx context.Context, market model.Market,
 	return content, nil
 }
 func (c *Client) GetBlockInfo(ctx context.Context, filename string) ([]model.Board, error) {
+	return c.GetBlockInfoWithOptions(ctx, filename, FileFetchOptions{})
+}
+
+func (c *Client) GetBlockInfoWithOptions(ctx context.Context, filename string, opts FileFetchOptions) ([]model.Board, error) {
+	opts = normalizeFileFetchOptions(opts)
 	got, err := c.execute(ctx, command.NewBlockInfoMetaCommand(filename))
 	if err != nil {
 		return nil, err
@@ -801,12 +834,16 @@ func (c *Client) GetBlockInfo(ctx context.Context, filename string) ([]model.Boa
 	if meta.Size <= 0 {
 		return nil, fmt.Errorf("tdx block_info %q empty metadata: size=%d", filename, meta.Size)
 	}
+	neededChunks := (meta.Size + opts.ChunkSize - 1) / opts.ChunkSize
+	if neededChunks > opts.MaxChunks {
+		return nil, fmt.Errorf("%w: block_info %q needed_chunks=%d max_chunks=%d chunk_size=%d meta_size=%d", errChunkBudgetExceeded, filename, neededChunks, opts.MaxChunks, opts.ChunkSize, meta.Size)
+	}
 	data := make([]byte, 0, meta.Size)
-	for start := 0; start < meta.Size; start += DefaultFileChunkSize {
+	for start := 0; start < meta.Size; start += opts.ChunkSize {
 		if err := contextError(ctx); err != nil {
 			return nil, err
 		}
-		length := DefaultFileChunkSize
+		length := opts.ChunkSize
 		if remain := meta.Size - start; remain < length {
 			length = remain
 		}
@@ -832,14 +869,21 @@ func (c *Client) GetBlockInfo(ctx context.Context, filename string) ([]model.Boa
 	}
 	return boards, nil
 }
+
 func (c *Client) GetReportFile(ctx context.Context, filename string) ([]byte, error) {
+	return c.GetReportFileWithOptions(ctx, filename, FileFetchOptions{})
+}
+
+func (c *Client) GetReportFileWithOptions(ctx context.Context, filename string, opts FileFetchOptions) ([]byte, error) {
+	opts = normalizeFileFetchOptions(opts)
 	data := make([]byte, 0)
-	for i := 0; i < MaxFileChunks; i++ {
+	complete := false
+	for i := 0; i < opts.MaxChunks; i++ {
 		if err := contextError(ctx); err != nil {
 			return nil, err
 		}
-		start := i * DefaultFileChunkSize
-		got, err := c.execute(ctx, command.NewReportFileCommand(filename, start, DefaultFileChunkSize))
+		start := i * opts.ChunkSize
+		got, err := c.execute(ctx, command.NewReportFileCommand(filename, start, opts.ChunkSize))
 		if err != nil {
 			return nil, err
 		}
@@ -848,16 +892,25 @@ func (c *Client) GetReportFile(ctx context.Context, filename string) ([]byte, er
 			return nil, fmt.Errorf("tdx report_file unexpected reply %T", got)
 		}
 		data = append(data, chunk...)
-		if len(chunk) < DefaultFileChunkSize {
+		if len(chunk) < opts.ChunkSize {
+			complete = true
 			break
 		}
 	}
 	if len(data) == 0 {
 		return nil, fmt.Errorf("tdx report_file %q empty payload", filename)
 	}
+	if !complete {
+		return nil, fmt.Errorf("%w: report_file %q max_chunks=%d chunk_size=%d bytes=%d", errChunkBudgetExceeded, filename, opts.MaxChunks, opts.ChunkSize, len(data))
+	}
 	return data, nil
 }
+
 func (c *Client) ListBoards(ctx context.Context, boardType string) ([]model.Board, error) {
+	return c.ListBoardsWithOptions(ctx, boardType, FileFetchOptions{})
+}
+
+func (c *Client) ListBoardsWithOptions(ctx context.Context, boardType string, opts FileFetchOptions) ([]model.Board, error) {
 	filename := "block_zs.dat"
 	switch boardType {
 	case "concept":
@@ -867,15 +920,23 @@ func (c *Client) ListBoards(ctx context.Context, boardType string) ([]model.Boar
 	case "industry", "index":
 		filename = "block_zs.dat"
 	}
-	return c.GetBlockInfo(ctx, filename)
+	return c.GetBlockInfoWithOptions(ctx, filename, opts)
 }
+
 func (c *Client) ListBoardMembers(ctx context.Context, boardCode string) ([]string, error) {
+	return c.ListBoardMembersWithOptions(ctx, boardCode, FileFetchOptions{})
+}
+
+func (c *Client) ListBoardMembersWithOptions(ctx context.Context, boardCode string, opts FileFetchOptions) ([]string, error) {
 	for _, filename := range []string{"block_gn.dat", "block_fg.dat", "block_zs.dat"} {
 		if err := contextError(ctx); err != nil {
 			return nil, err
 		}
-		boards, err := c.GetBlockInfo(ctx, filename)
+		boards, err := c.GetBlockInfoWithOptions(ctx, filename, opts)
 		if err != nil {
+			if isContextErr(err) || errors.Is(err, errChunkBudgetExceeded) {
+				return nil, err
+			}
 			continue
 		}
 		for _, board := range boards {
@@ -902,18 +963,23 @@ type pageSignature struct {
 	Last  transactionSignature
 }
 
-func (c *Client) collectTransactionRecords(ctx context.Context, fetch func(start int, count int) ([]model.Transaction, error), pageSize int, maxStart int) ([]model.Transaction, error) {
+func (c *Client) collectTransactionRecords(ctx context.Context, fetch func(start int, count int) ([]model.Transaction, error), opts FundFlowOptions) ([]model.Transaction, error) {
 	out := make([]model.Transaction, 0)
 	seenRecords := make(map[transactionSignature]struct{})
 	seenPages := make(map[pageSignature]struct{})
-	for start := 0; start < maxStart; {
+	pages := 0
+	for start := 0; start < opts.MaxStart; {
 		if err := contextError(ctx); err != nil {
 			return nil, err
 		}
-		records, err := fetch(start, pageSize)
+		if opts.MaxPages > 0 && pages >= opts.MaxPages {
+			return nil, fmt.Errorf("%w: transaction max_pages=%d page_size=%d max_start=%d rows=%d", errPageBudgetExceeded, opts.MaxPages, opts.PageSize, opts.MaxStart, len(out))
+		}
+		records, err := fetch(start, opts.PageSize)
 		if err != nil {
 			return nil, err
 		}
+		pages++
 		if len(records) == 0 {
 			break
 		}
@@ -942,6 +1008,26 @@ func (c *Client) collectTransactionRecords(ctx context.Context, fetch func(start
 		}
 	}
 	return out, nil
+}
+
+func normalizeFileFetchOptions(opts FileFetchOptions) FileFetchOptions {
+	if opts.ChunkSize <= 0 || opts.ChunkSize > DefaultFileChunkSize {
+		opts.ChunkSize = DefaultFileChunkSize
+	}
+	if opts.MaxChunks <= 0 {
+		opts.MaxChunks = MaxFileChunks
+	}
+	return opts
+}
+
+func normalizeFundFlowOptions(opts FundFlowOptions, defaultPageSize int) FundFlowOptions {
+	if opts.PageSize <= 0 {
+		opts.PageSize = defaultPageSize
+	}
+	if opts.MaxStart <= 0 {
+		opts.MaxStart = 10000
+	}
+	return opts
 }
 
 func signatureOfTransaction(record model.Transaction) transactionSignature {

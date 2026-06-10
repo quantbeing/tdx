@@ -716,6 +716,29 @@ func TestClientGetReportFileStopsWhenContextCanceledBetweenChunks(t *testing.T) 
 	}
 }
 
+func TestClientGetReportFileWithOptionsReportsChunkBudget(t *testing.T) {
+	var calls int32
+	client := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				calls++
+				if cmd.Operation() != "report_file" {
+					t.Fatalf("operation = %s, want report_file", cmd.Operation())
+				}
+				return bytesOfLen(DefaultFileChunkSize), nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.GetReportFileWithOptions(context.Background(), "base_info.zip", FileFetchOptions{MaxChunks: 1}); err == nil || !strings.Contains(err.Error(), "chunk budget") {
+		t.Fatalf("err = %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
 func TestClientGetReportFileRejectsEmptyPayload(t *testing.T) {
 	client := NewClient(Options{
 		Servers: []model.Server{{Host: "good", Port: 7709}},
@@ -749,6 +772,62 @@ func TestClientGetBlockInfoRejectsEmptyMeta(t *testing.T) {
 
 	if _, err := client.GetBlockInfo(context.Background(), "block_gn.dat"); err == nil || !strings.Contains(err.Error(), "empty metadata") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestClientGetBlockInfoWithOptionsRejectsChunkBudget(t *testing.T) {
+	var blockCalls int32
+	client := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				switch cmd.Operation() {
+				case "block_info_meta":
+					return model.FileMeta{Filename: "block_gn.dat", Size: DefaultFileChunkSize + 1}, nil
+				case "block_info":
+					atomic.AddInt32(&blockCalls, 1)
+					return bytesOfLen(DefaultFileChunkSize), nil
+				default:
+					t.Fatalf("operation = %s", cmd.Operation())
+				}
+				return nil, nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.GetBlockInfoWithOptions(context.Background(), "block_gn.dat", FileFetchOptions{MaxChunks: 1}); err == nil || !strings.Contains(err.Error(), "chunk budget") {
+		t.Fatalf("err = %v", err)
+	}
+	if blockCalls != 0 {
+		t.Fatalf("blockCalls = %d, want 0", blockCalls)
+	}
+}
+
+func TestClientListBoardMembersWithOptionsReportsChunkBudget(t *testing.T) {
+	var blockCalls int32
+	client := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				switch cmd.Operation() {
+				case "block_info_meta":
+					return model.FileMeta{Filename: "block_gn.dat", Size: DefaultFileChunkSize + 1}, nil
+				case "block_info":
+					atomic.AddInt32(&blockCalls, 1)
+					return bytesOfLen(DefaultFileChunkSize), nil
+				default:
+					t.Fatalf("operation = %s", cmd.Operation())
+				}
+				return nil, nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.ListBoardMembersWithOptions(context.Background(), "concept", FileFetchOptions{MaxChunks: 1}); err == nil || !strings.Contains(err.Error(), "chunk budget") {
+		t.Fatalf("err = %v", err)
+	}
+	if blockCalls != 0 {
+		t.Fatalf("blockCalls = %d, want 0", blockCalls)
 	}
 }
 
@@ -809,6 +888,33 @@ func TestClientGetFundFlowStopsWhenContextCanceledBetweenPages(t *testing.T) {
 
 	if _, err := client.GetFundFlow(ctx, model.MarketSH, "600519"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
+func TestClientGetFundFlowWithOptionsReportsPageBudget(t *testing.T) {
+	var calls int32
+	records := make([]model.Transaction, 100)
+	for i := range records {
+		records[i] = model.Transaction{Hour: 9, Minute: 30 + i, Price: model.NewDecimal(1000, 2), Vol: 100, BuyOrSell: 0}
+	}
+	client := NewClient(Options{
+		Servers: []model.Server{{Host: "good", Port: 7709}},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				calls++
+				if cmd.Operation() != "transaction" {
+					t.Fatalf("operation = %s, want transaction", cmd.Operation())
+				}
+				return records, nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.GetFundFlowWithOptions(context.Background(), model.MarketSH, "600519", FundFlowOptions{MaxPages: 1}); err == nil || !strings.Contains(err.Error(), "page budget") {
+		t.Fatalf("err = %v", err)
 	}
 	if calls != 1 {
 		t.Fatalf("calls = %d, want 1", calls)

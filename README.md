@@ -280,6 +280,11 @@ stat, err := client.GetMarketStat(ctx)
 
 flow, err := client.GetFundFlow(ctx, model.MarketSH, "600519")
 
+fastFlow, err := client.GetFundFlowWithOptions(ctx, model.MarketSH, "600519", tdx.FundFlowOptions{
+    PageSize:  800,
+    MaxPages: 2,
+})
+
 historyFlow, err := client.GetHistoryFundFlow(ctx, model.MarketSH, "600519", 0, 20)
 ```
 
@@ -294,6 +299,7 @@ historyFlow, err := client.GetHistoryFundFlow(ctx, model.MarketSH, "600519", 0, 
 - `GetMarketStat` 是 canonical helper，基于 SH `880005` quote 派生。
 - 当日 `GetFundFlow` 基于 L1 逐笔成交按金额阈值聚合。
 - `GetHistoryFundFlow` 优先走 category 22 直连协议；若服务器空回包，则 fallback 到日 K 日期加历史逐笔成交重算。
+- `GetFundFlowWithOptions` / `GetHistoryFundFlowWithOptions` 可设置 `PageSize`、`MaxStart`、`MaxPages`。达到页数预算会返回包含 `page budget` 的错误，避免长时间等待或静默截断。
 
 ```go
 fmt.Println(flow.MainNetInflow())
@@ -331,6 +337,10 @@ members, err := client.ListBoardMembers(ctx, "某板块名称")
 blockFileBoards, err := client.GetBlockInfo(ctx, "block_gn.dat")
 
 baseInfoZip, err := client.GetReportFile(ctx, "base_info.zip")
+
+sampleZip, err := client.GetReportFileWithOptions(ctx, "base_info.zip", tdx.FileFetchOptions{
+    MaxChunks: 2,
+})
 ```
 
 返回类型：
@@ -339,7 +349,9 @@ baseInfoZip, err := client.GetReportFile(ctx, "base_info.zip")
 - `[]string`
 - `[]byte`
 
-`GetBlockInfo` 会先读 metadata，再按 chunk 拉取板块文件并解析 `.dat`。`GetReportFile` 会按 chunk 拉取服务端文件，直到短 chunk 或达到安全上限。
+`GetBlockInfo` 会先读 metadata，再按 chunk 拉取板块文件并解析 `.dat`。`GetReportFile` 会按 chunk 拉取服务端文件，直到短 chunk。
+
+`GetBlockInfoWithOptions`、`GetReportFileWithOptions`、`ListBoardsWithOptions`、`ListBoardMembersWithOptions` 可设置 `ChunkSize` 和 `MaxChunks`。达到 chunk 预算会返回包含 `chunk budget` 的错误，调用方可以据此选择缩短等待、换 host 或发起后台补全任务。`ChunkSize` 默认并限制为不超过 `tdx.DefaultFileChunkSize`。
 
 ### Raw Capture For Protocol Auditing
 

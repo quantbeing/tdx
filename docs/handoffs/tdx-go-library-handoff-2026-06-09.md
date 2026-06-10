@@ -171,7 +171,9 @@ Current public API includes:
 - Market statistics and fund flow:
   - `GetMarketStat()`
   - `GetFundFlow()`
+  - `GetFundFlowWithOptions()`
   - `GetHistoryFundFlow()`
+  - `GetHistoryFundFlowWithOptions()`
 - Finance and company data:
   - `GetFinanceInfo()`
   - `GetXdxrInfo()`
@@ -179,9 +181,13 @@ Current public API includes:
   - `GetCompanyInfoContent()`
 - Boards and files:
   - `GetBlockInfo()`
+  - `GetBlockInfoWithOptions()`
   - `GetReportFile()`
+  - `GetReportFileWithOptions()`
   - `ListBoards()`
+  - `ListBoardsWithOptions()`
   - `ListBoardMembers()`
+  - `ListBoardMembersWithOptions()`
 
 ### High Availability And Observability
 
@@ -193,6 +199,9 @@ Current public API includes:
 - Implemented `TimeoutPolicy`, `OperationMarket`, and `FastTimeoutPolicy()` for per-operation/per-market fail-fast deadlines.
 - Implemented parent-context cancellation checks between composed API batches/pages/chunks for quotes, security lists, fund-flow aggregation, report/block files, and board-member scans.
 - Implemented page-budget controls for `ListSecuritiesWithOptions` / `ListASharesWithOptions`; budget truncation is reported as `security_list_budget` partial failure.
+- Implemented explicit pagination/chunk budgets for fund-flow and server-file helpers:
+  - `GetFundFlowWithOptions()` / `GetHistoryFundFlowWithOptions()` return a `page budget` error when transaction aggregation exceeds caller budget.
+  - `GetBlockInfoWithOptions()` / `GetReportFileWithOptions()` / `ListBoardsWithOptions()` / `ListBoardMembersWithOptions()` return a `chunk budget` error instead of silent truncation.
 - Implemented `KeepAliveManager` for repeated heartbeat failure handling.
 - Implemented TCP setup deadline and setup frame error checking.
 - Implemented `Observer` hook and `ObserverFunc`.
