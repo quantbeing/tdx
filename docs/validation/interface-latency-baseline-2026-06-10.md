@@ -149,7 +149,7 @@ These APIs perform routing, batching, pagination, or chunking:
 | `GetSnapshot` | alias of `GetSecurityQuotes` |
 | `GetSecurityQuotes` | splits symbols into batches of at most `80` |
 | `ListSecurities` | per market: count, then `security_list` pages of `1000` |
-| `ListAShares` | `ListSecurities(SH,SZ,BJ)` plus A-share code filtering |
+| `ListAShares` | `ListSecurities(SH,SZ)` plus A-share code filtering; BJ is explicit opt-in through `ListASharesWithOptions` |
 | `GetBlockInfo` / `GetBlockInfoWithOptions` | file meta, chunk fetch, then local `.dat` parse; options can cap chunk budget |
 | `GetReportFile` / `GetReportFileWithOptions` | repeated `report_file` chunks until short chunk; options can cap chunk budget |
 | `ListBoards` / `ListBoardsWithOptions` | maps board type to block file and calls `GetBlockInfo` |

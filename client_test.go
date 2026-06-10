@@ -641,6 +641,60 @@ func TestClientListSecuritiesWithOptionsCanStopOnError(t *testing.T) {
 	}
 }
 
+func TestClientListASharesDefaultsToStableMarkets(t *testing.T) {
+	var markets []model.Market
+	client := NewClient(Options{
+		Servers: []model.Server{{Name: "good", Host: "good", Port: 7709}},
+		Pool:    PoolOptions{Disable: true},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				if cmd.Operation() != "security_count" {
+					t.Fatalf("operation = %s, want security_count", cmd.Operation())
+				}
+				countCmd := cmd.(command.SecurityCountCommand)
+				markets = append(markets, countCmd.Market)
+				return uint16(0), nil
+			}), nil
+		}),
+	})
+
+	got, err := client.ListAShares(context.Background())
+	if err != nil {
+		t.Fatalf("ListAShares: %v", err)
+	}
+	if len(got.Items) != 0 || len(got.Failures) != 0 {
+		t.Fatalf("result = %+v", got)
+	}
+	if len(markets) != 2 || markets[0] != model.MarketSH || markets[1] != model.MarketSZ {
+		t.Fatalf("markets = %v, want SH/SZ", markets)
+	}
+}
+
+func TestClientListASharesWithOptionsDefaultsToStableMarkets(t *testing.T) {
+	var markets []model.Market
+	client := NewClient(Options{
+		Servers: []model.Server{{Name: "good", Host: "good", Port: 7709}},
+		Pool:    PoolOptions{Disable: true},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(_ context.Context, cmd command.Command) (any, error) {
+				if cmd.Operation() != "security_count" {
+					t.Fatalf("operation = %s, want security_count", cmd.Operation())
+				}
+				countCmd := cmd.(command.SecurityCountCommand)
+				markets = append(markets, countCmd.Market)
+				return uint16(0), nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.ListASharesWithOptions(context.Background(), ListSecuritiesOptions{}); err != nil {
+		t.Fatalf("ListASharesWithOptions: %v", err)
+	}
+	if len(markets) != 2 || markets[0] != model.MarketSH || markets[1] != model.MarketSZ {
+		t.Fatalf("markets = %v, want SH/SZ", markets)
+	}
+}
+
 func TestKeepAliveClosesConnectionAfterFailures(t *testing.T) {
 	var closed int32
 	rt := &closeAwareRoundTripper{

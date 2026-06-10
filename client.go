@@ -687,12 +687,12 @@ func (c *Client) ListSecuritiesWithOptions(ctx context.Context, opts ListSecurit
 }
 
 func (c *Client) ListAShares(ctx context.Context) (model.PartialResult[model.Security], error) {
-	return c.ListASharesWithOptions(ctx, ListSecuritiesOptions{Markets: []model.Market{model.MarketSH, model.MarketSZ, model.MarketBJ}})
+	return c.ListASharesWithOptions(ctx, ListSecuritiesOptions{Markets: defaultAShareMarkets()})
 }
 
 func (c *Client) ListASharesWithOptions(ctx context.Context, opts ListSecuritiesOptions) (model.PartialResult[model.Security], error) {
 	if len(opts.Markets) == 0 {
-		opts.Markets = []model.Market{model.MarketSH, model.MarketSZ, model.MarketBJ}
+		opts.Markets = defaultAShareMarkets()
 	}
 	all, err := c.ListSecuritiesWithOptions(ctx, opts)
 	filtered := all.Items[:0]
@@ -707,6 +707,10 @@ func (c *Client) ListASharesWithOptions(ctx context.Context, opts ListSecurities
 
 func (c *Client) ListMarkets(context.Context) []model.Market {
 	return []model.Market{model.MarketSH, model.MarketSZ, model.MarketBJ}
+}
+
+func defaultAShareMarkets() []model.Market {
+	return []model.Market{model.MarketSH, model.MarketSZ}
 }
 
 func (c *Client) GetSecurityBars(ctx context.Context, market model.Market, code string, category model.KlineCategory, start, count int) ([]model.Bar, error) {

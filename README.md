@@ -207,6 +207,11 @@ sample, err := client.ListSecuritiesWithOptions(ctx, tdx.ListSecuritiesOptions{
 })
 
 ashares, err := client.ListAShares(ctx)
+
+asharesWithBJ, err := client.ListASharesWithOptions(ctx, tdx.ListSecuritiesOptions{
+    Markets: []model.Market{model.MarketSH, model.MarketSZ, model.MarketBJ},
+})
+
 markets := client.ListMarkets(ctx)
 ```
 
@@ -216,6 +221,7 @@ markets := client.ListMarkets(ctx)
 - `model.PartialResult[model.Security]`
 
 `ListSecurities` 会分页拉取，遇到部分市场失败时返回 typed partial result，不会静默丢失败信息。
+`ListAShares` 默认只拉 SH/SZ，避免公网 BJ `security_list` 不稳定影响 instrument 主路径；需要 BJ 时通过 `ListASharesWithOptions` 显式传入 `model.MarketBJ`。
 `ListSecuritiesWithOptions` / `ListASharesWithOptions` 可给全市场列表增加页数预算；达到 `MaxPagesPerMarket` 会返回 partial failure，而不是静默截断。
 业务侧可用 `tdx.IsPartialResultError(err)` 区分“结果可读但不完整”和真正的硬失败，然后根据 `result.Failures` 决定是否重试某个 market/page。
 
