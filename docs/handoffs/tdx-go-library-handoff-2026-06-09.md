@@ -221,7 +221,10 @@ Implemented CLIs:
 
 - `cmd/tdx-health`
 - `cmd/tdx-probe`
+- `cmd/tdx-data-probe`
+- `cmd/tdx-op-matrix`
 - `cmd/tdx-fixture-matrix`
+- `cmd/tdx-validate`
 - `cmd/tdx-dump-frame`
 - `cmd/tdx-compare-py`
 
@@ -484,7 +487,9 @@ Files likely to change:
 
 ### P1 - Operation-Aware Live Health
 
-Current `HealthCheck` accepts command objects and `OperationStats` tracks per-operation state. The next useful addition is a richer live health matrix command.
+Current `HealthCheck` accepts command objects and `OperationStats` tracks per-operation state. `FromBestHostByOperations()` and `tdx-health -probe` can now select a host by caller-selected operation probes and return per-host `HostHealth`.
+
+The remaining useful addition is richer per-operation payload diagnostics in the live health output.
 
 Suggested output fields:
 
@@ -497,8 +502,6 @@ Suggested output fields:
 - parsed row count
 - error
 - cooldown status
-
-This can extend `tdx-health` or become `tdx-health -matrix`.
 
 ### P2 - API Stability And Versioning
 

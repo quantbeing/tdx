@@ -459,7 +459,10 @@ for _, s := range snapshots {
 ```bash
 go run ./cmd/tdx-health
 go run ./cmd/tdx-health -hosts 180.153.18.170:7709,180.153.18.171:7709 -timeout 5s
+go run ./cmd/tdx-health -probe security-list-sh,quote -timeout 3s
 ```
+
+不带 `-probe` 时输出 setup ping 结果；带 `-probe` 时按 operation 探测每个 host，输出 `selected` 和 `health` 明细。可用的 operation 名称与 `tdx-fixture-matrix` 默认矩阵一致，例如 `security-count`、`security-list-sh`、`security-list-sz`、`security-list-bj`、`stock-bars`、`index-bars`、`quote`、`minute`、`transaction`、`finance`、`xdxr`、`block-meta`、`report`。
 
 ### Operation Probe
 
