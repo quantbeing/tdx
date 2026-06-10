@@ -287,7 +287,8 @@ Latest live runs in this environment, on 2026-06-09 around 21:04-21:06 Asia/Shan
 - Data-package integrity caveat: manifest/local-index/HTTP file MD5 and size semantics are not direct strong checks in sampled live data. For example, some same-name files had different manifest and `.local` MD5 values, and one sampled `.dat` content length differed from manifest size by 13 bytes.
 - Go standard HTTP direct fetch for sampled `.dat` returned a `text/html` JavaScript challenge in this environment. `tdx-data-probe` now rejects HTML/challenge bodies; use curl plus `tdx-data-probe -kind dat13 -input /tmp/file.dat` for binary samples.
 - `gpbj920021.dat` downloaded by curl was 141154 bytes and parsed into 10858 fixed 13-byte records with no trailing bytes. First date-like values were `20151231`, `20160630`, `20161231`, `20170630`; first float32-like values were `17`, `36`, `55`, `181`.
-- The `dat13` summary now includes marker counts, date-like min/max, float32-like min/max, and non-zero field2 count. For `gpbj920021.dat`, min/max date-like was `0/20260609`, field1 range was about `-1820.42/502124.97`, and field2 was non-zero in `3048` rows. Marker distribution is mixed, so the next parser step should group by marker.
+- The `dat13` summary now includes marker counts, sorted marker-group summaries, date-like min/max, float32-like min/max, and non-zero field2 count. For `gpbj920021.dat`, min/max date-like was `0/20260609`, field1 range was about `-1820.42/502124.97`, and field2 was non-zero in `3048` rows.
+- Useful marker-group clues in `gpbj920021.dat`: marker `1` has 33 rows and field2 always zero; markers `3/11/12/13` each have 804 rows and the same date range `20230213..20260608`; marker `27` has 1483 rows and field2 is non-zero in every row. Treat these as row classes to reverse engineer separately.
 - Passed across these runs: SH/SZ count and first security-list pages, single-symbol quote, multi-market quote, day bars, minute-time structural check, transaction page when public server responded, market stat, finance, XDXR, company category, and `boards_concept` with 270 rows.
 - Failed due current public-server behavior: `fund_flow_SH_600519` and `history_fund_flow_SH_600519` intermittently hit transaction/history-transaction timeout; `report_file_base_info.zip` returned 0 bytes in the files smoke.
 - Prior minute-time negative-volume warnings are gone after parsing the live real-time symbol prefix. Prior multi-market quote bad second symbol is gone after fixing quote parser offset shadowing.
@@ -335,9 +336,9 @@ BenchmarkClientGetSecurityQuotesBatchSplit 15453 ns/op 192769 B/op     169 alloc
 Additional 2026-06-10 data-package parser benchmark:
 
 ```text
-BenchmarkParseDataPackageManifest-8          1707342 ns/op  2120914 B/op  14532 allocs/op
-BenchmarkParseDataPackageLocalIndex-8        1192943 ns/op  1969465 B/op  14515 allocs/op
-BenchmarkParseDataPackageFixed13Records-8     342552 ns/op  1043824 B/op  10859 allocs/op
+BenchmarkParseDataPackageManifest-8          1724604 ns/op  2120097 B/op  14525 allocs/op
+BenchmarkParseDataPackageLocalIndex-8        1306654 ns/op  1969360 B/op  14515 allocs/op
+BenchmarkParseDataPackageFixed13Records-8     307844 ns/op  1043818 B/op  10859 allocs/op
 ```
 
 Remaining validation work:

@@ -461,7 +461,7 @@ go run ./cmd/tdx-data-probe -kind dat13 -input /tmp/tdx-gpbj920021.dat -limit 0
 | `-prefix gpbj` | 按文件名前缀过滤，例如只看 BJ 候选 `gpbj*.dat`。 |
 | `-limit 20` | JSON 中最多输出多少条 entry；`-1` 输出全部。 |
 
-2026-06-10 live 观察：`gpszsh.txt` manifest 当前有 `7240` 个条目，其中 `gpbj*.dat` 为 `319` 个；`gpszsh.local` 的 `[MD5]` 段同样能枚举 `319` 个 `gpbj` 条目。manifest/local-index/HTTP 文件的 MD5 与 size 语义存在不一致样本，现阶段只作为诊断 finding，不作为强完整性校验。Go 标准 HTTP 客户端抓部分 `.dat` 时会收到 CDN `text/html` challenge，`tdx-data-probe` 会拒绝误解析；需要 `.dat` 样本时优先用 curl 下载，再用 `-input` 解析本地文件。`dat13` summary 会输出 marker 分布、date-like 范围、float32-like 范围和非零 field2 计数，下一步应按 marker 分组反推字段。
+2026-06-10 live 观察：`gpszsh.txt` manifest 当前有 `7240` 个条目，其中 `gpbj*.dat` 为 `319` 个；`gpszsh.local` 的 `[MD5]` 段同样能枚举 `319` 个 `gpbj` 条目。manifest/local-index/HTTP 文件的 MD5 与 size 语义存在不一致样本，现阶段只作为诊断 finding，不作为强完整性校验。Go 标准 HTTP 客户端抓部分 `.dat` 时会收到 CDN `text/html` challenge，`tdx-data-probe` 会拒绝误解析；需要 `.dat` 样本时优先用 curl 下载，再用 `-input` 解析本地文件。`dat13` summary 会输出 marker 分布、按 marker 排序的 group 摘要、date-like 范围、float32-like 范围和非零 field2 计数，下一步应按 marker 分组反推字段。
 
 ### Live Fixture Matrix
 
@@ -585,7 +585,7 @@ Live fixture tests 不放进默认单元测试，请显式使用 `TDX_LIVE=1`。
 - `tdx-validate -full-security-list` 已支持全市场分页完整性校验；默认 smoke 为了速度仍只查第 0 页。最新 SH/SZ live baseline 加上 `-security-list-page-retries 1` 后分别拉完 27215/23411 行，若干分页首次失败后重试成功并保留 warning。
 - BJ live baseline 中 `security_count_BJ=345`，但 `security_list_BJ_page_0` 在 15s timeout、3 次 page retry 下仍超时。`tdx-data-probe` 已确认官方 `tdxgp/gpszsh.txt` 与 `gpszsh.local` 可枚举 `319` 个 `gpbj*.dat` 候选，但还不能替代完整 BJ 证券列表。
 - `TDX_LIVE=1 tdx-validate` 含 boards/files：`boards_concept` 返回 270 行，`report_file_base_info.zip` 在当前公网节点返回 0 字节，仍需 fallback/节点矩阵继续反推。
-- 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `34.0 us/op`，minute parser 约 `9.1 us/op`，5000 行 universe validation 约 `244.0 us/op`，80 符号 quote 分片 client benchmark 约 `15.5 us/op`。新增官方数据包 parser benchmark 中，7240 行 manifest 约 `1.71 ms/op`，7240 行 `.local` index 约 `1.19 ms/op`，10858 条 fixed13 raw record 约 `0.34 ms/op`。完整输出记录在 handoff 文档。
+- 性能基线在 Apple M2 / darwin arm64 上已重跑：quote parser 约 `34.0 us/op`，minute parser 约 `9.1 us/op`，5000 行 universe validation 约 `244.0 us/op`，80 符号 quote 分片 client benchmark 约 `15.5 us/op`。新增官方数据包 parser benchmark 中，7240 行 manifest 约 `1.72 ms/op`，7240 行 `.local` index 约 `1.31 ms/op`，10858 条 fixed13 raw record 约 `0.31 ms/op`。完整输出记录在 handoff 文档。
 
 ## Known Limits
 

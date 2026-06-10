@@ -269,7 +269,7 @@ func TestFetchDataPackageFixed13RecordsRejectsHTMLChallenge(t *testing.T) {
 }
 
 func TestSummarizeDataPackageFixed13RecordsLimitsRows(t *testing.T) {
-	data, err := hex.DecodeString("01bf7b330100008841000000000176a033010000104200000001")
+	data, err := hex.DecodeString("01bf7b330100008841000000000176a03301000010420000000102cfa2330100005c4202000000")
 	if err != nil {
 		t.Fatalf("DecodeString: %v", err)
 	}
@@ -279,20 +279,34 @@ func TestSummarizeDataPackageFixed13RecordsLimitsRows(t *testing.T) {
 	}
 
 	summary := SummarizeDataPackageFixed13Records(records, 1)
-	if summary.RecordCount != 2 || len(summary.Records) != 1 || summary.RecordsTruncated != 1 {
+	if summary.RecordCount != 3 || len(summary.Records) != 1 || summary.RecordsTruncated != 2 {
 		t.Fatalf("summary = %+v", summary)
 	}
-	if summary.DateLikeMin != 20151231 || summary.DateLikeMax != 20160630 {
+	if summary.DateLikeMin != 20151231 || summary.DateLikeMax != 20161231 {
 		t.Fatalf("date range = %d/%d", summary.DateLikeMin, summary.DateLikeMax)
 	}
-	if summary.Field1Float32Min != 17 || summary.Field1Float32Max != 36 {
+	if summary.Field1Float32Min != 17 || summary.Field1Float32Max != 55 {
 		t.Fatalf("field1 range = %v/%v", summary.Field1Float32Min, summary.Field1Float32Max)
 	}
-	if summary.Field2NonzeroCount != 1 {
+	if summary.Field2NonzeroCount != 2 {
 		t.Fatalf("Field2NonzeroCount = %d", summary.Field2NonzeroCount)
 	}
 	if summary.MarkerCounts["1"] != 2 {
 		t.Fatalf("MarkerCounts = %+v", summary.MarkerCounts)
+	}
+	if len(summary.MarkerGroups) != 2 {
+		t.Fatalf("MarkerGroups = %+v", summary.MarkerGroups)
+	}
+	firstGroup := summary.MarkerGroups[0]
+	if firstGroup.Marker != 1 || firstGroup.Count != 2 || firstGroup.FirstOffset != 0 || firstGroup.FirstRawHex != "01bf7b33010000884100000000" {
+		t.Fatalf("first group = %+v", firstGroup)
+	}
+	if firstGroup.DateLikeMin != 20151231 || firstGroup.DateLikeMax != 20160630 || firstGroup.Field2NonzeroCount != 1 {
+		t.Fatalf("first group stats = %+v", firstGroup)
+	}
+	secondGroup := summary.MarkerGroups[1]
+	if secondGroup.Marker != 2 || secondGroup.Count != 1 || secondGroup.Field1Float32Min != 55 || secondGroup.Field2NonzeroCount != 1 {
+		t.Fatalf("second group = %+v", secondGroup)
 	}
 }
 

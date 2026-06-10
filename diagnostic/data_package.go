@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -77,6 +78,18 @@ type DataPackageFixed13Records struct {
 	TrailingBytesHex string                     `json:"trailing_bytes_hex,omitempty"`
 }
 
+type DataPackageFixed13MarkerGroup struct {
+	Marker             uint8   `json:"marker"`
+	Count              int     `json:"count"`
+	FirstOffset        int     `json:"first_offset"`
+	FirstRawHex        string  `json:"first_raw_hex"`
+	DateLikeMin        int     `json:"date_like_min"`
+	DateLikeMax        int     `json:"date_like_max"`
+	Field1Float32Min   float64 `json:"field1_float32_min"`
+	Field1Float32Max   float64 `json:"field1_float32_max"`
+	Field2NonzeroCount int     `json:"field2_nonzero_count"`
+}
+
 type DataPackageManifestSummary struct {
 	Source           string             `json:"source,omitempty"`
 	EntryCount       int                `json:"entry_count"`
@@ -101,19 +114,20 @@ type DataPackageLocalIndexSummary struct {
 }
 
 type DataPackageFixed13Summary struct {
-	Source             string                     `json:"source,omitempty"`
-	RecordSize         int                        `json:"record_size"`
-	RecordCount        int                        `json:"record_count"`
-	TrailingBytes      int                        `json:"trailing_bytes"`
-	TrailingBytesHex   string                     `json:"trailing_bytes_hex,omitempty"`
-	MarkerCounts       map[string]int             `json:"marker_counts,omitempty"`
-	DateLikeMin        int                        `json:"date_like_min"`
-	DateLikeMax        int                        `json:"date_like_max"`
-	Field1Float32Min   float64                    `json:"field1_float32_min"`
-	Field1Float32Max   float64                    `json:"field1_float32_max"`
-	Field2NonzeroCount int                        `json:"field2_nonzero_count"`
-	RecordsTruncated   int                        `json:"records_truncated"`
-	Records            []DataPackageFixed13Record `json:"records,omitempty"`
+	Source             string                          `json:"source,omitempty"`
+	RecordSize         int                             `json:"record_size"`
+	RecordCount        int                             `json:"record_count"`
+	TrailingBytes      int                             `json:"trailing_bytes"`
+	TrailingBytesHex   string                          `json:"trailing_bytes_hex,omitempty"`
+	MarkerCounts       map[string]int                  `json:"marker_counts,omitempty"`
+	MarkerGroups       []DataPackageFixed13MarkerGroup `json:"marker_groups,omitempty"`
+	DateLikeMin        int                             `json:"date_like_min"`
+	DateLikeMax        int                             `json:"date_like_max"`
+	Field1Float32Min   float64                         `json:"field1_float32_min"`
+	Field1Float32Max   float64                         `json:"field1_float32_max"`
+	Field2NonzeroCount int                             `json:"field2_nonzero_count"`
+	RecordsTruncated   int                             `json:"records_truncated"`
+	Records            []DataPackageFixed13Record      `json:"records,omitempty"`
 }
 
 func FetchDataPackageManifest(ctx context.Context, url string, client *http.Client) (DataPackageManifest, error) {
@@ -231,6 +245,7 @@ func SummarizeDataPackageFixed13Records(records DataPackageFixed13Records, limit
 		TrailingBytes:      records.TrailingBytes,
 		TrailingBytesHex:   records.TrailingBytesHex,
 		MarkerCounts:       stats.markerCounts,
+		MarkerGroups:       summarizeFixed13MarkerGroups(records.Records),
 		DateLikeMin:        stats.dateLikeMin,
 		DateLikeMax:        stats.dateLikeMax,
 		Field1Float32Min:   stats.field1Min,
@@ -349,6 +364,65 @@ func summarizeFixed13Stats(records []DataPackageFixed13Record) fixed13Stats {
 		}
 	}
 	return stats
+}
+
+func summarizeFixed13MarkerGroups(records []DataPackageFixed13Record) []DataPackageFixed13MarkerGroup {
+	if len(records) == 0 {
+		return nil
+	}
+	type groupAccumulator struct {
+		group      DataPackageFixed13MarkerGroup
+		field1Seen bool
+	}
+	byMarker := make(map[uint8]*groupAccumulator)
+	for _, record := range records {
+		acc, ok := byMarker[record.Marker]
+		if !ok {
+			acc = &groupAccumulator{
+				group: DataPackageFixed13MarkerGroup{
+					Marker:      record.Marker,
+					FirstOffset: record.Offset,
+					FirstRawHex: record.RawHex,
+					DateLikeMin: record.DateLike,
+					DateLikeMax: record.DateLike,
+				},
+			}
+			byMarker[record.Marker] = acc
+		}
+		acc.group.Count++
+		if record.DateLike < acc.group.DateLikeMin {
+			acc.group.DateLikeMin = record.DateLike
+		}
+		if record.DateLike > acc.group.DateLikeMax {
+			acc.group.DateLikeMax = record.DateLike
+		}
+		if record.Field1Float32Valid {
+			if !acc.field1Seen {
+				acc.group.Field1Float32Min = record.Field1Float32
+				acc.group.Field1Float32Max = record.Field1Float32
+				acc.field1Seen = true
+			}
+			if record.Field1Float32 < acc.group.Field1Float32Min {
+				acc.group.Field1Float32Min = record.Field1Float32
+			}
+			if record.Field1Float32 > acc.group.Field1Float32Max {
+				acc.group.Field1Float32Max = record.Field1Float32
+			}
+		}
+		if record.Field2Uint32 != 0 {
+			acc.group.Field2NonzeroCount++
+		}
+	}
+	markers := make([]int, 0, len(byMarker))
+	for marker := range byMarker {
+		markers = append(markers, int(marker))
+	}
+	sort.Ints(markers)
+	groups := make([]DataPackageFixed13MarkerGroup, 0, len(markers))
+	for _, marker := range markers {
+		groups = append(groups, byMarker[uint8(marker)].group)
+	}
+	return groups
 }
 
 func (m DataPackageManifest) FindEntry(fileName string) (DataPackageEntry, bool) {

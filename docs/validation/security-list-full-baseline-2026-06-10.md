@@ -169,6 +169,13 @@ Result:
 - Date-like range in raw summary: min `0`, max `20260609`.
 - Float32-like field range: min about `-1820.42`, max about `502124.97`.
 - `field2_uint32` is non-zero in `3048` rows.
+- Marker group examples:
+  - `marker=1`: `33` rows, dates `20151231..20260331`, field1 `17..36339`, field2 always zero.
+  - `marker=3`: `804` rows, dates `20230213..20260608`, field1 `1.3..7922.6`, field2 always zero.
+  - `marker=11`: `804` rows, same dates as marker `3`, field1 `0..7835.65`, field2 non-zero in `711` rows.
+  - `marker=12`: `804` rows, same dates as marker `3`, field1 all zero, field2 always zero.
+  - `marker=13`: `804` rows, same dates as marker `3`, field1 `-1820.42..2734.19`, field2 always zero.
+  - `marker=27`: `1483` rows, dates `20220507..20260609`, field1 `36..5336`, field2 non-zero in every row.
 - First records preserve raw hex plus fields named only by observed shape:
   - `20151231`, `field1_float32=17`
   - `20160630`, `field1_float32=36`
