@@ -202,6 +202,7 @@ Current public API includes:
 - Implemented global host scoring.
 - Implemented operation-aware host stats and cooldown.
 - Implemented `TimeoutPolicy`, `OperationMarket`, and `FastTimeoutPolicy()` for per-operation/per-market fail-fast deadlines.
+- 2026-06-11 added context-carried request policy via `RequestOptions`, `WithRequestOptions`, and `RequestOptionsFromContext`, so a single request chain can override `MaxAttempts`, `Retry`, and `TimeoutPolicy` without adding retry parameters to every public API method.
 - Implemented parent-context cancellation checks between composed API batches/pages/chunks for quotes, security lists, fund-flow aggregation, report/block files, and board-member scans.
 - Implemented page-budget controls for `ListSecuritiesWithOptions` / `ListASharesWithOptions`; budget truncation is reported as `security_list_budget` partial failure.
 - Implemented `IsPartialResultError()` so callers can distinguish readable partial results from hard failures without string matching.
@@ -265,6 +266,15 @@ go test -count=1 ./...
 
 Result: all packages passed.
 
+2026-06-11 request-level policy override verification commands recorded after implementation:
+
+```bash
+go test -count=1 ./...
+go vet ./...
+go test -race .
+go test -run=^$ -bench=Client -benchmem .
+```
+
 Dry-run push was checked after the K-line category fix:
 
 ```bash
@@ -279,6 +289,12 @@ To github-quantbeing:quantbeing/tdx.git
 ```
 
 Live TDX smoke tests are not part of default verification. They should be run explicitly with current network conditions.
+
+## Operational Notes
+
+- Keep production defaults on `Options`: host list, connect/read timeout, pool, circuit breaker, observer, default `MaxAttempts`, retry strategy, and default `TimeoutPolicy`.
+- Use `WithRequestOptions` for one-off request-chain SLA overrides, such as stricter attempts, retry strategy, or timeout overlay for a single workflow.
+- Use API-specific `XxxWithOptions` for business budgets, such as page counts, chunk limits, and partial-result behavior.
 
 ## Data Integrity And Performance Test Status
 
