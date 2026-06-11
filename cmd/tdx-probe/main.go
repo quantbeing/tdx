@@ -26,6 +26,9 @@ func main() {
 	var file string
 	var timeout time.Duration
 	var captureDir string
+	var maxAttempts int
+	var retryStrategyRaw string
+	var sameHostAttempts int
 	flag.StringVar(&op, "op", "security-count", "operation: security-count, security-list, stock-bars, index-bars, quote, market-stat, minute, history-minute, transaction, history-transaction, fund-flow, history-fund-flow, finance, xdxr, company, block-meta, block, report")
 	flag.StringVar(&market, "market", "sh", "market: sh, sz, bj")
 	flag.StringVar(&code, "code", "", "security code for symbol operations")
@@ -36,9 +39,28 @@ func main() {
 	flag.StringVar(&file, "file", "", "filename for block/report operations")
 	flag.DurationVar(&timeout, "timeout", 8*time.Second, "timeout")
 	flag.StringVar(&captureDir, "capture-dir", "", "write raw response fixture JSON to this directory")
+	flag.IntVar(&maxAttempts, "max-attempts", 0, "maximum attempts per request; 0 uses client default")
+	flag.StringVar(&retryStrategyRaw, "retry-strategy", "failover-first", "retry strategy: failover-first or same-host-first")
+	flag.IntVar(&sameHostAttempts, "same-host-attempts", 1, "same-host attempts for same-host-first retry strategy")
 	flag.Parse()
 
-	client := tdx.NewClient(tdx.Options{Timeout: timeout})
+	retryStrategy, err := parseRetryStrategy(retryStrategyRaw)
+	if err != nil {
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
+			"operation": op,
+			"ok":        false,
+			"error":     err.Error(),
+		})
+		os.Exit(2)
+	}
+	client := tdx.NewClient(tdx.Options{
+		Timeout:     timeout,
+		MaxAttempts: maxAttempts,
+		Retry: tdx.RetryOptions{
+			Strategy:         retryStrategy,
+			SameHostAttempts: sameHostAttempts,
+		},
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -212,6 +234,17 @@ func parseSymbols(raw string) ([]model.Symbol, error) {
 		}
 	}
 	return out, nil
+}
+
+func parseRetryStrategy(raw string) (tdx.RetryStrategy, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "failover-first", "failover_first", "failover":
+		return tdx.RetryStrategyFailoverFirst, nil
+	case "same-host-first", "same_host_first", "same-host":
+		return tdx.RetryStrategySameHostFirst, nil
+	default:
+		return "", fmt.Errorf("unknown retry strategy %q", raw)
+	}
 }
 
 func defaultCode(code string, market model.Market) string {

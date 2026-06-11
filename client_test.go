@@ -170,6 +170,37 @@ func TestFromBestHostByOperationsReturnsHealthWhenAllHostsFail(t *testing.T) {
 	}
 }
 
+func TestFromBestHostByOperationsRespectsExplicitMaxAttempts(t *testing.T) {
+	var calls int
+	opts := Options{
+		Servers:     []model.Server{{Name: "flaky", Host: "flaky", Port: 7709}},
+		MaxAttempts: 2,
+		Dialer: DialerFunc(func(context.Context, model.Server, TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(context.Context, command.Command) (any, error) {
+				calls++
+				if calls == 1 {
+					return nil, errors.New("transient timeout")
+				}
+				return uint16(100), nil
+			}), nil
+		}),
+	}
+
+	client, health, err := FromBestHostByOperations(context.Background(), opts, command.NewSecurityCountCommand(model.MarketSH))
+	if err != nil {
+		t.Fatalf("FromBestHostByOperations: %v", err)
+	}
+	if client == nil || len(client.ServerStats()) != 1 {
+		t.Fatalf("client stats = %#v", client)
+	}
+	if calls != 2 {
+		t.Fatalf("calls = %d, want 2", calls)
+	}
+	if len(health) != 1 || !health[0].OK {
+		t.Fatalf("health = %+v", health)
+	}
+}
+
 func TestClientReusesSuccessfulConnectionFromPool(t *testing.T) {
 	var dials int32
 	var closes int32

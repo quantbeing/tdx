@@ -40,6 +40,9 @@ func run(args []string, stdout io.Writer, client validation.LiveClient, getenv f
 	var skipFiles bool
 	var fullSecurityList bool
 	var securityListPageRetries int
+	var maxAttempts int
+	var retryStrategyRaw string
+	var sameHostAttempts int
 	var pretty bool
 
 	fs := flag.NewFlagSet("tdx-validate", flag.ContinueOnError)
@@ -61,6 +64,9 @@ func run(args []string, stdout io.Writer, client validation.LiveClient, getenv f
 	fs.BoolVar(&skipFiles, "skip-files", false, "skip report-file validation")
 	fs.BoolVar(&fullSecurityList, "full-security-list", false, "validate every security-list page for each selected market")
 	fs.IntVar(&securityListPageRetries, "security-list-page-retries", 0, "retry each full security-list page this many times after a page error")
+	fs.IntVar(&maxAttempts, "max-attempts", 0, "maximum attempts per request; 0 uses client default")
+	fs.StringVar(&retryStrategyRaw, "retry-strategy", "failover-first", "retry strategy: failover-first or same-host-first")
+	fs.IntVar(&sameHostAttempts, "same-host-attempts", 1, "same-host attempts for same-host-first retry strategy")
 	fs.BoolVar(&pretty, "pretty", false, "pretty-print JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -101,7 +107,11 @@ func run(args []string, stdout io.Writer, client validation.LiveClient, getenv f
 
 	ownedClient := false
 	if client == nil {
-		client = tdx.NewClient(buildClientOptions(timeout, operationTimeout, connectTimeout))
+		clientOpts, err := buildClientOptions(timeout, operationTimeout, connectTimeout, maxAttempts, retryStrategyRaw, sameHostAttempts)
+		if err != nil {
+			return err
+		}
+		client = tdx.NewClient(clientOpts)
 		ownedClient = true
 	}
 	if ownedClient {
@@ -119,20 +129,40 @@ func run(args []string, stdout io.Writer, client validation.LiveClient, getenv f
 	return enc.Encode(report)
 }
 
-func buildClientOptions(_ time.Duration, operationTimeout time.Duration, connectTimeout time.Duration) tdx.Options {
+func buildClientOptions(_ time.Duration, operationTimeout time.Duration, connectTimeout time.Duration, maxAttempts int, retryStrategyRaw string, sameHostAttempts int) (tdx.Options, error) {
 	if operationTimeout <= 0 {
 		operationTimeout = 8 * time.Second
 	}
 	if connectTimeout <= 0 || connectTimeout > operationTimeout {
 		connectTimeout = operationTimeout
 	}
+	retryStrategy, err := parseRetryStrategy(retryStrategyRaw)
+	if err != nil {
+		return tdx.Options{}, err
+	}
 	return tdx.Options{
-		Timeout: operationTimeout,
+		MaxAttempts: maxAttempts,
+		Timeout:     operationTimeout,
+		Retry: tdx.RetryOptions{
+			Strategy:         retryStrategy,
+			SameHostAttempts: sameHostAttempts,
+		},
 		Transport: tdx.TransportOptions{
 			ConnectTimeout: connectTimeout,
 			WriteTimeout:   connectTimeout,
 			ReadTimeout:    operationTimeout,
 		},
+	}, nil
+}
+
+func parseRetryStrategy(raw string) (tdx.RetryStrategy, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "failover-first", "failover_first", "failover":
+		return tdx.RetryStrategyFailoverFirst, nil
+	case "same-host-first", "same_host_first", "same-host":
+		return tdx.RetryStrategySameHostFirst, nil
+	default:
+		return "", fmt.Errorf("unknown retry strategy %q", raw)
 	}
 }
 

@@ -496,6 +496,8 @@ go run ./cmd/tdx-health -probe security-list-sh,quote -timeout 3s
 
 不带 `-probe` 时输出 setup ping 结果；带 `-probe` 时按 operation 探测每个 host，输出 `selected` 和 `health` 明细。可用的 operation 名称与 `tdx-fixture-matrix` 默认矩阵一致，例如 `security-count`、`security-list-sh`、`security-list-sz`、`security-list-bj`、`stock-bars`、`index-bars`、`quote`、`minute`、`transaction`、`finance`、`xdxr`、`block-meta`、`report`。
 
+带 `-probe` 时可用 `-max-attempts`、`-retry-strategy failover-first|same-host-first` 和 `-same-host-attempts` 调整 host 选择探测的 retry 策略；这适合对比公网节点 failover 和私有节点瞬时抖动。
+
 ### Operation Probe
 
 ```bash
@@ -539,6 +541,9 @@ report
 | `-date 20240607` | 历史分时、历史逐笔等历史 command 的交易日。 |
 | `-start 0` / `-count 50` | 分页或 chunk command 的起点和数量。 |
 | `-file base_info.zip` | 板块、报表文件 command 的文件名。 |
+| `-max-attempts 2` | 单次 command 的最多 attempt 次数；0 使用 client 默认。 |
+| `-retry-strategy failover-first|same-host-first` | 公网节点排障通常用 failover-first，私有节点瞬时抖动可试 same-host-first。 |
+| `-same-host-attempts 2` | same-host-first 下同一 host 连续尝试次数。 |
 
 ### Official Data Package Probe
 
@@ -591,6 +596,8 @@ TDX_LIVE=1 go run ./cmd/tdx-validate \
 ```
 
 `tdx-validate` 会直接调用 public API，并输出 JSON 完整性报告：每个 operation 的 `ok`、行数、latency、error/warning finding 都会保留。默认需要 `TDX_LIVE=1`，避免普通测试误打公网。
+
+公网/私有节点排障时可加 `-max-attempts`、`-retry-strategy failover-first|same-host-first`、`-same-host-attempts` 控制 client-level retry；`-operation-timeout` 和 `-connect-timeout` 的既有语义不变。
 
 ### Operation Host Matrix
 

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	tdx "github.com/quantbeing/tdx"
 	"github.com/quantbeing/tdx/model"
 )
 
@@ -86,12 +87,35 @@ func TestParseSymbolsRejectsBadToken(t *testing.T) {
 }
 
 func TestBuildClientOptionsUsesShortTransportTimeouts(t *testing.T) {
-	opts := buildClientOptions(60*time.Second, 5*time.Second, 2*time.Second)
+	opts, err := buildClientOptions(60*time.Second, 5*time.Second, 2*time.Second, 0, "failover-first", 1)
+	if err != nil {
+		t.Fatalf("buildClientOptions: %v", err)
+	}
 	if opts.Timeout != 5*time.Second {
 		t.Fatalf("timeout = %s, want 5s", opts.Timeout)
 	}
 	if opts.Transport.ConnectTimeout != 2*time.Second || opts.Transport.WriteTimeout != 2*time.Second || opts.Transport.ReadTimeout != 5*time.Second {
 		t.Fatalf("transport = %+v", opts.Transport)
+	}
+}
+
+func TestBuildClientOptionsUsesRetryOptions(t *testing.T) {
+	opts, err := buildClientOptions(60*time.Second, 5*time.Second, 2*time.Second, 3, "same-host", 2)
+	if err != nil {
+		t.Fatalf("buildClientOptions: %v", err)
+	}
+	if opts.MaxAttempts != 3 {
+		t.Fatalf("MaxAttempts = %d, want 3", opts.MaxAttempts)
+	}
+	if opts.Retry != (tdx.RetryOptions{Strategy: tdx.RetryStrategySameHostFirst, SameHostAttempts: 2}) {
+		t.Fatalf("Retry = %+v", opts.Retry)
+	}
+}
+
+func TestBuildClientOptionsRejectsUnknownRetryStrategy(t *testing.T) {
+	_, err := buildClientOptions(60*time.Second, 5*time.Second, 2*time.Second, 3, "sticky", 2)
+	if err == nil || !strings.Contains(err.Error(), "unknown retry strategy") {
+		t.Fatalf("err = %v", err)
 	}
 }
 

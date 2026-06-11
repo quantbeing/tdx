@@ -596,7 +596,9 @@ func (c *Client) HealthCheck(ctx context.Context, ops ...command.Command) []Oper
 func probeHostOperations(ctx context.Context, opts Options, server model.Server, probes []command.Command) HostHealth {
 	probeOpts := opts
 	probeOpts.Servers = []model.Server{server}
-	probeOpts.MaxAttempts = 1
+	if probeOpts.MaxAttempts <= 0 {
+		probeOpts.MaxAttempts = 1
+	}
 	probeOpts.Pool.Disable = true
 	client := NewClient(probeOpts)
 	defer client.Close()
