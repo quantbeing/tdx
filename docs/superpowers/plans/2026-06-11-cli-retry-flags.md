@@ -172,3 +172,13 @@ Expected: commit succeeds; `.idea/` remains untouched.
 - Spec coverage: covers validate/probe/health flags, parser aliases, tests, docs, and verification.
 - Scope decision: `tdx-op-matrix` remains unchanged because `MaxAttempts=1` is part of its measurement design.
 - Placeholder scan: no TODO/TBD/fill-in-later items.
+
+## Addendum: Fixture Matrix
+
+After the first CLI pass, `tdx-fixture-matrix` was added to the same retry-control family because it captures raw protocol fixtures through `Client.Capture` and benefits from the same public/private node diagnostics:
+
+- `-max-attempts`
+- `-retry-strategy failover-first|same-host-first`
+- `-same-host-attempts`
+
+`tdx-op-matrix` remains intentionally unchanged.

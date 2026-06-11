@@ -60,3 +60,27 @@ func TestRunRejectsUnknownOperation(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestRunRejectsUnknownRetryStrategy(t *testing.T) {
+	var out bytes.Buffer
+	err := run([]string{"-out", t.TempDir(), "-retry-strategy", "sticky"}, &out, cliFakeCapturer{}, func(string) string { return "1" })
+	if err == nil || !strings.Contains(err.Error(), "unknown retry strategy") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestBuildClientOptionsUsesRetryOptions(t *testing.T) {
+	opts, err := buildClientOptions(12*time.Second, 3, "same-host", 2)
+	if err != nil {
+		t.Fatalf("buildClientOptions: %v", err)
+	}
+	if opts.Timeout != 12*time.Second {
+		t.Fatalf("Timeout = %s, want 12s", opts.Timeout)
+	}
+	if opts.MaxAttempts != 3 {
+		t.Fatalf("MaxAttempts = %d, want 3", opts.MaxAttempts)
+	}
+	if opts.Retry != (tdx.RetryOptions{Strategy: tdx.RetryStrategySameHostFirst, SameHostAttempts: 2}) {
+		t.Fatalf("Retry = %+v", opts.Retry)
+	}
+}

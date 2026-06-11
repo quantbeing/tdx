@@ -579,6 +579,7 @@ TDX_LIVE=1 go run ./cmd/tdx-fixture-matrix \
 ```
 
 输出 JSONL，一行一个 operation 结果。单个 operation 失败不会阻断后续 operation，适合收集公网节点能力矩阵。
+抓取 fixture 时也可加 `-max-attempts`、`-retry-strategy failover-first|same-host-first`、`-same-host-attempts` 调整 retry；如果目标是比较单个 host/operation 的真实失败率，仍使用 `tdx-op-matrix`。
 
 ### Live Integrity Validation
 
