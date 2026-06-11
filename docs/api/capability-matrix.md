@@ -4,6 +4,7 @@
 |---|---:|---|
 | TCP setup and response frame decode | yes | Includes zlib and raw frame body validation. |
 | Protocol/API mapping docs | yes | `docs/api/protocol-interface-map.md` maps each public API to raw TDX TCP commands, request bytes, parser fields, and composite API chains. |
+| Broader TDX ecosystem tracks | research | ExHQ `7727`, local VIPDOC readers, professional financial packages, ranking/sorting discovery, Level2, and trading boundaries are documented in `docs/investigations/tdx-broader-ecosystem-research-2026-06-11.md`. These are not part of the stable HQ `7709` client yet. |
 | Server seed list and ping | yes | Static seed list plus `PingAll`; `FromBestHost` selects by setup latency. |
 | Operation-aware health checks | yes | `HealthCheck` accepts command objects; `FromBestHostByOperations` probes each host with caller-selected commands and returns `[]HostHealth`; `OperationStats` exposes per-operation host stats and cooling state. |
 | Request-level host failover | yes | `MaxAttempts` rotates hosts and records stats; operation-aware cooldown skips failing host/operation pairs. `WithRequestOptions` can override `MaxAttempts` and `Retry` for one context-carried request chain. Default retry strategy is failover-first; same-host-first is available but not recommended for public nodes. |

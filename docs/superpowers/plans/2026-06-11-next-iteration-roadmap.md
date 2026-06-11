@@ -121,16 +121,22 @@ This is outside the current HQ `7709` stable core and should be planned as separ
 
 Candidate tracks:
 
-- Level2 depth, order queue, order detail.
-- Ranking lists, market sorting,异动/竞价.
-- Extension market, futures, options, HK/US surfaces.
-- Trading protocol.
-- Local VIPDOC file parsing.
-- Professional finance package parsing.
+- [ ] Level2 depth, order queue, order detail.
+- [ ] Ranking lists, market sorting,异动/竞价.
+- [x] Extension market, futures, options, HK/US surfaces: researched as ExHQ `7727` track.
+- [x] Trading protocol: scoped out of market-data SDK and documented as separate module/repo if needed.
+- [x] Local VIPDOC file parsing: researched as deterministic local reader track.
+- [x] Professional finance package parsing: researched as `tdxfin/gpcw*.zip` package track.
 
 Acceptance:
 
-- Each track starts with protocol source research, fixture capture, command matrix, and clear scope boundaries before production API exposure.
+- [x] Each track starts with protocol source research, fixture capture, command matrix, and clear scope boundaries before production API exposure.
+
+Artifacts:
+
+- Research: `docs/investigations/tdx-broader-ecosystem-research-2026-06-11.md`
+- Design: `docs/superpowers/specs/2026-06-11-broader-tdx-ecosystem-design.md`
+- Implementation plan: `docs/superpowers/plans/2026-06-11-broader-tdx-ecosystem.md`
 
 ## Recommended Execution Order
 
