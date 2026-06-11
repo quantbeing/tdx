@@ -391,6 +391,7 @@ These APIs are not one-to-one wire commands. They combine raw commands, route by
 | `FromBestHostByOperations(ctx, opts, probes...)` | For each server, creates single-host client and runs `HealthCheck` with caller-provided commands. | Returns selected client plus `[]HostHealth` evidence; fails if no host passes all probes. |
 | `HealthCheck(ctx, ops...)` | Executes each command through normal `Client.execute`. | Records operation, OK, latency, error. |
 | `Capture(ctx, cmd)` | Executes one raw command and returns `CapturedResponse`. | Preserves request/header/raw compressed body/decoded body/parsed result. |
+| `WithRequestOptions(ctx, opts)` | Not a TDX command. The context carries request policy for subsequent API calls. | `MaxAttempts` and `Retry` override the client policy for this request chain. `TimeoutPolicy` overrides only non-zero operation/market/default entries; unspecified entries inherit the client policy. |
 | `ListSecurities(ctx, markets...)` | For each market: `GetSecurityCount`, then `GetSecurityList` pages of 1000. | Returns `model.PartialResult[Security]`; failures are in `Failures`; `IsPartialResultError(err)` means items may still be usable. |
 | `ListSecuritiesWithOptions(ctx, opts)` | Same as `ListSecurities`, with `Markets`, `MaxPagesPerMarket`, `StopOnError`. | Page budget creates failure operation `security_list_budget`. |
 | `ListAShares(ctx)` | Calls `ListASharesWithOptions` with default markets SH/SZ, then filters A-share code prefixes. | BJ is intentionally not default because public BJ list is unstable. |

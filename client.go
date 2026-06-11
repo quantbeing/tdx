@@ -27,6 +27,32 @@ type Options struct {
 	Observer       Observer
 }
 
+type RequestOptions struct {
+	MaxAttempts   int
+	Retry         RetryOptions
+	TimeoutPolicy TimeoutPolicy
+}
+
+type requestOptionsContextKey struct{}
+
+func WithRequestOptions(ctx context.Context, opts RequestOptions) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, requestOptionsContextKey{}, cloneRequestOptions(opts))
+}
+
+func RequestOptionsFromContext(ctx context.Context) (RequestOptions, bool) {
+	if ctx == nil {
+		return RequestOptions{}, false
+	}
+	opts, ok := ctx.Value(requestOptionsContextKey{}).(RequestOptions)
+	if !ok {
+		return RequestOptions{}, false
+	}
+	return cloneRequestOptions(opts), true
+}
+
 type RetryStrategy string
 
 const (
@@ -48,6 +74,28 @@ type TimeoutPolicy struct {
 	DefaultTimeout          time.Duration
 	OperationTimeouts       map[string]time.Duration
 	MarketOperationTimeouts map[OperationMarket]time.Duration
+}
+
+func cloneRequestOptions(opts RequestOptions) RequestOptions {
+	opts.TimeoutPolicy = cloneTimeoutPolicy(opts.TimeoutPolicy)
+	return opts
+}
+
+func cloneTimeoutPolicy(policy TimeoutPolicy) TimeoutPolicy {
+	out := TimeoutPolicy{DefaultTimeout: policy.DefaultTimeout}
+	if len(policy.OperationTimeouts) > 0 {
+		out.OperationTimeouts = make(map[string]time.Duration, len(policy.OperationTimeouts))
+		for operation, timeout := range policy.OperationTimeouts {
+			out.OperationTimeouts[operation] = timeout
+		}
+	}
+	if len(policy.MarketOperationTimeouts) > 0 {
+		out.MarketOperationTimeouts = make(map[OperationMarket]time.Duration, len(policy.MarketOperationTimeouts))
+		for operationMarket, timeout := range policy.MarketOperationTimeouts {
+			out.MarketOperationTimeouts[operationMarket] = timeout
+		}
+	}
+	return out
 }
 
 type TransportOptions struct {
@@ -182,6 +230,7 @@ func NewClient(opts Options) *Client {
 		opts.Dialer = NetDialer{}
 	}
 	opts.Retry = normalizeRetryOptions(opts.Retry)
+	opts.TimeoutPolicy = cloneTimeoutPolicy(opts.TimeoutPolicy)
 	breakerFailure := opts.CircuitBreaker.FailureThreshold
 	if breakerFailure <= 0 {
 		breakerFailure = 3
@@ -239,6 +288,58 @@ func normalizeRetryOptions(opts RetryOptions) RetryOptions {
 		opts.SameHostAttempts = 1
 	}
 	return opts
+}
+
+func shouldOverrideRetryOptions(opts RetryOptions) bool {
+	return opts.Strategy != "" || opts.SameHostAttempts > 0
+}
+
+func hasTimeoutPolicyConfig(policy TimeoutPolicy) bool {
+	if policy.DefaultTimeout > 0 {
+		return true
+	}
+	for _, timeout := range policy.OperationTimeouts {
+		if timeout > 0 {
+			return true
+		}
+	}
+	for _, timeout := range policy.MarketOperationTimeouts {
+		if timeout > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeTimeoutPolicy(base TimeoutPolicy, override TimeoutPolicy) TimeoutPolicy {
+	if !hasTimeoutPolicyConfig(override) {
+		return base
+	}
+	merged := TimeoutPolicy{
+		DefaultTimeout:          base.DefaultTimeout,
+		OperationTimeouts:       make(map[string]time.Duration, len(base.OperationTimeouts)+len(override.OperationTimeouts)),
+		MarketOperationTimeouts: make(map[OperationMarket]time.Duration, len(base.MarketOperationTimeouts)+len(override.MarketOperationTimeouts)),
+	}
+	for operation, timeout := range base.OperationTimeouts {
+		merged.OperationTimeouts[operation] = timeout
+	}
+	for operationMarket, timeout := range base.MarketOperationTimeouts {
+		merged.MarketOperationTimeouts[operationMarket] = timeout
+	}
+	if override.DefaultTimeout > 0 {
+		merged.DefaultTimeout = override.DefaultTimeout
+	}
+	for operation, timeout := range override.OperationTimeouts {
+		if timeout > 0 {
+			merged.OperationTimeouts[operation] = timeout
+		}
+	}
+	for operationMarket, timeout := range override.MarketOperationTimeouts {
+		if timeout > 0 {
+			merged.MarketOperationTimeouts[operationMarket] = timeout
+		}
+	}
+	return merged
 }
 
 func FastTimeoutPolicy() TimeoutPolicy {
@@ -538,14 +639,11 @@ func hostHealthLess(a HostHealth, b HostHealth) bool {
 
 func (c *Client) Capture(ctx context.Context, cmd command.Command) (CapturedResponse, error) {
 	var lastErr error
-	attempts := c.attempts
-	if attempts <= 0 {
-		attempts = 1
-	}
+	policy := c.requestPolicy(ctx)
 	var plan retryAttemptPlan
-	for attempt := 0; attempt < attempts; attempt++ {
-		attemptCtx, cancel := c.contextForCommand(ctx, cmd)
-		idx, server := c.pickAttemptServer(cmd.Operation(), &plan)
+	for attempt := 0; attempt < policy.attempts; attempt++ {
+		attemptCtx, cancel := contextForCommand(ctx, cmd, policy.timeoutPolicy)
+		idx, server := c.pickAttemptServer(cmd.Operation(), &plan, policy.retry)
 		rt, reused, err := c.acquire(attemptCtx, idx, server)
 		if err != nil {
 			cancel()
@@ -1198,14 +1296,11 @@ func addFundAmount(flow *model.FundFlow, amount float64, inflow bool) {
 
 func (c *Client) execute(ctx context.Context, cmd command.Command) (any, error) {
 	var lastErr error
-	attempts := c.attempts
-	if attempts <= 0 {
-		attempts = 1
-	}
+	policy := c.requestPolicy(ctx)
 	var plan retryAttemptPlan
-	for attempt := 0; attempt < attempts; attempt++ {
-		attemptCtx, cancel := c.contextForCommand(ctx, cmd)
-		idx, server := c.pickAttemptServer(cmd.Operation(), &plan)
+	for attempt := 0; attempt < policy.attempts; attempt++ {
+		attemptCtx, cancel := contextForCommand(ctx, cmd, policy.timeoutPolicy)
+		idx, server := c.pickAttemptServer(cmd.Operation(), &plan, policy.retry)
 		rt, reused, err := c.acquire(attemptCtx, idx, server)
 		if err != nil {
 			cancel()
@@ -1309,8 +1404,41 @@ type retryAttemptPlan struct {
 	ok        bool
 }
 
-func (c *Client) pickAttemptServer(op string, plan *retryAttemptPlan) (int, model.Server) {
-	if c.retryStrategy == RetryStrategySameHostFirst && c.sameHostAttempts > 1 {
+type requestPolicy struct {
+	attempts      int
+	retry         RetryOptions
+	timeoutPolicy TimeoutPolicy
+}
+
+func (c *Client) requestPolicy(ctx context.Context) requestPolicy {
+	policy := requestPolicy{
+		attempts: c.attempts,
+		retry: RetryOptions{
+			Strategy:         c.retryStrategy,
+			SameHostAttempts: c.sameHostAttempts,
+		},
+		timeoutPolicy: c.opts.TimeoutPolicy,
+	}
+	if opts, ok := RequestOptionsFromContext(ctx); ok {
+		if opts.MaxAttempts > 0 {
+			policy.attempts = opts.MaxAttempts
+		}
+		if shouldOverrideRetryOptions(opts.Retry) {
+			policy.retry = normalizeRetryOptions(opts.Retry)
+		}
+		if hasTimeoutPolicyConfig(opts.TimeoutPolicy) {
+			policy.timeoutPolicy = mergeTimeoutPolicy(policy.timeoutPolicy, opts.TimeoutPolicy)
+		}
+	}
+	if policy.attempts <= 0 {
+		policy.attempts = 1
+	}
+	policy.retry = normalizeRetryOptions(policy.retry)
+	return policy
+}
+
+func (c *Client) pickAttemptServer(op string, plan *retryAttemptPlan, retry RetryOptions) (int, model.Server) {
+	if retry.Strategy == RetryStrategySameHostFirst && retry.SameHostAttempts > 1 {
 		if plan != nil && plan.ok && plan.remaining > 0 {
 			plan.remaining--
 			return plan.idx, plan.server
@@ -1319,7 +1447,7 @@ func (c *Client) pickAttemptServer(op string, plan *retryAttemptPlan) (int, mode
 		if plan != nil {
 			plan.idx = idx
 			plan.server = server
-			plan.remaining = c.sameHostAttempts - 1
+			plan.remaining = retry.SameHostAttempts - 1
 			plan.ok = true
 		}
 		return idx, server
@@ -1348,8 +1476,11 @@ func (c *Client) pickServer(op string) (int, model.Server) {
 	return firstIdx, c.servers[firstIdx]
 }
 
-func (c *Client) contextForCommand(ctx context.Context, cmd command.Command) (context.Context, context.CancelFunc) {
-	timeout := c.opts.TimeoutPolicy.TimeoutFor(cmd)
+func contextForCommand(ctx context.Context, cmd command.Command, policy TimeoutPolicy) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timeout := policy.TimeoutFor(cmd)
 	if timeout <= 0 {
 		return ctx, func() {}
 	}

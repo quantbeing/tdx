@@ -479,6 +479,314 @@ func TestClientFailoverFirstCyclesHostsWhenMaxAttemptsExceedsServerCount(t *test
 	}
 }
 
+func TestClientRequestOptionsOverrideMaxAttempts(t *testing.T) {
+	newClient := func(hosts *[]string) *Client {
+		return NewClient(Options{
+			Servers:     []model.Server{{Name: "bad", Host: "bad", Port: 7709}, {Name: "good", Host: "good", Port: 7709}},
+			MaxAttempts: 1,
+			Pool:        PoolOptions{Disable: true},
+			CircuitBreaker: CircuitBreakerOptions{
+				FailureThreshold: 100,
+				Cooldown:         time.Hour,
+			},
+			Dialer: DialerFunc(func(_ context.Context, server model.Server, _ TransportOptions) (RoundTripper, error) {
+				*hosts = append(*hosts, server.Name)
+				return roundTripFunc(func(context.Context, command.Command) (any, error) {
+					if server.Name == "bad" {
+						return nil, errors.New("host down")
+					}
+					return uint16(100), nil
+				}), nil
+			}),
+		})
+	}
+
+	var baselineHosts []string
+	if _, err := newClient(&baselineHosts).GetSecurityCount(context.Background(), model.MarketSH); err == nil {
+		t.Fatal("GetSecurityCount without request override unexpectedly succeeded")
+	}
+	if len(baselineHosts) != 1 || baselineHosts[0] != "bad" {
+		t.Fatalf("baseline hosts = %v, want bad", baselineHosts)
+	}
+
+	var hosts []string
+	client := newClient(&hosts)
+	ctx := WithRequestOptions(context.Background(), RequestOptions{MaxAttempts: 2})
+	count, err := client.GetSecurityCount(ctx, model.MarketSH)
+	if err != nil {
+		t.Fatalf("GetSecurityCount with request override: %v", err)
+	}
+	if count != 100 {
+		t.Fatalf("count = %d, want 100", count)
+	}
+	if len(hosts) != 2 || hosts[0] != "bad" || hosts[1] != "good" {
+		t.Fatalf("hosts = %v, want bad,good", hosts)
+	}
+}
+
+func TestClientRequestOptionsOverrideRetryStrategySameHostFirst(t *testing.T) {
+	var hosts []string
+	client := NewClient(Options{
+		Servers:     []model.Server{{Name: "bad", Host: "bad", Port: 7709}, {Name: "good", Host: "good", Port: 7709}},
+		MaxAttempts: 2,
+		Pool:        PoolOptions{Disable: true},
+		Retry:       RetryOptions{Strategy: RetryStrategyFailoverFirst},
+		CircuitBreaker: CircuitBreakerOptions{
+			FailureThreshold: 100,
+			Cooldown:         time.Hour,
+		},
+		Dialer: DialerFunc(func(_ context.Context, server model.Server, _ TransportOptions) (RoundTripper, error) {
+			hosts = append(hosts, server.Name)
+			return roundTripFunc(func(context.Context, command.Command) (any, error) {
+				if server.Name == "bad" {
+					return nil, errors.New("host down")
+				}
+				return uint16(100), nil
+			}), nil
+		}),
+	})
+
+	ctx := WithRequestOptions(context.Background(), RequestOptions{
+		Retry: RetryOptions{Strategy: RetryStrategySameHostFirst, SameHostAttempts: 2},
+	})
+	if _, err := client.GetSecurityCount(ctx, model.MarketSH); err == nil {
+		t.Fatal("GetSecurityCount unexpectedly succeeded")
+	}
+	if len(hosts) != 2 || hosts[0] != "bad" || hosts[1] != "bad" {
+		t.Fatalf("hosts = %v, want bad,bad", hosts)
+	}
+}
+
+func TestClientRequestOptionsOverrideTimeoutPolicy(t *testing.T) {
+	seen := make(map[string]time.Duration)
+	client := NewClient(Options{
+		Servers: []model.Server{{Name: "fake", Host: "fake", Port: 7709}},
+		Timeout: 10 * time.Second,
+		Transport: TransportOptions{
+			ConnectTimeout: 10 * time.Second,
+			ReadTimeout:    10 * time.Second,
+			WriteTimeout:   10 * time.Second,
+		},
+		TimeoutPolicy: TimeoutPolicy{
+			OperationTimeouts: map[string]time.Duration{
+				"security_count": 3 * time.Second,
+				"security_list":  2 * time.Second,
+			},
+		},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(ctx context.Context, cmd command.Command) (any, error) {
+				deadline, ok := ctx.Deadline()
+				if !ok {
+					t.Fatalf("%s missing deadline", cmd.Operation())
+				}
+				seen[cmd.Operation()] = time.Until(deadline)
+				switch cmd.Operation() {
+				case "security_count":
+					return uint16(100), nil
+				case "security_list":
+					return []model.Security{}, nil
+				default:
+					t.Fatalf("operation = %s", cmd.Operation())
+				}
+				return nil, nil
+			}), nil
+		}),
+	})
+
+	ctx := WithRequestOptions(context.Background(), RequestOptions{
+		TimeoutPolicy: TimeoutPolicy{
+			OperationTimeouts: map[string]time.Duration{
+				"security_count": 1200 * time.Millisecond,
+			},
+		},
+	})
+	if count, err := client.GetSecurityCount(ctx, model.MarketSH); err != nil {
+		t.Fatalf("GetSecurityCount: %v", err)
+	} else if count != 100 {
+		t.Fatalf("count = %d, want 100", count)
+	}
+	if _, err := client.GetSecurityList(ctx, model.MarketSH, 0); err != nil {
+		t.Fatalf("GetSecurityList: %v", err)
+	}
+	if len(seen) != 2 {
+		t.Fatalf("seen = %+v", seen)
+	}
+	if seen["security_count"] <= time.Second || seen["security_count"] > 1500*time.Millisecond {
+		t.Fatalf("security_count timeout = %s, want about 1.2s", seen["security_count"])
+	}
+	if seen["security_list"] <= 1500*time.Millisecond || seen["security_list"] > 2500*time.Millisecond {
+		t.Fatalf("security_list timeout = %s, want inherited 2s", seen["security_list"])
+	}
+}
+
+func TestClientRequestOptionsAllowNilContext(t *testing.T) {
+	var seen time.Duration
+	client := NewClient(Options{
+		Servers: []model.Server{{Name: "fake", Host: "fake", Port: 7709}},
+		TimeoutPolicy: TimeoutPolicy{
+			OperationTimeouts: map[string]time.Duration{
+				"security_count": 1200 * time.Millisecond,
+			},
+		},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(ctx context.Context, cmd command.Command) (any, error) {
+				deadline, ok := ctx.Deadline()
+				if !ok {
+					t.Fatalf("%s missing deadline", cmd.Operation())
+				}
+				seen = time.Until(deadline)
+				return uint16(100), nil
+			}), nil
+		}),
+	})
+
+	if count, err := client.GetSecurityCount(nil, model.MarketSH); err != nil {
+		t.Fatalf("GetSecurityCount: %v", err)
+	} else if count != 100 {
+		t.Fatalf("count = %d, want 100", count)
+	}
+	if seen <= time.Second || seen > 1500*time.Millisecond {
+		t.Fatalf("timeout = %s, want about 1.2s", seen)
+	}
+}
+
+func TestClientRequestOptionsZeroValueDoesNotOverridePolicy(t *testing.T) {
+	var hosts []string
+	client := NewClient(Options{
+		Servers:     []model.Server{{Name: "bad", Host: "bad", Port: 7709}, {Name: "good", Host: "good", Port: 7709}},
+		MaxAttempts: 1,
+		Pool:        PoolOptions{Disable: true},
+		CircuitBreaker: CircuitBreakerOptions{
+			FailureThreshold: 100,
+			Cooldown:         time.Hour,
+		},
+		Dialer: DialerFunc(func(_ context.Context, server model.Server, _ TransportOptions) (RoundTripper, error) {
+			hosts = append(hosts, server.Name)
+			return roundTripFunc(func(context.Context, command.Command) (any, error) {
+				if server.Name == "bad" {
+					return nil, errors.New("host down")
+				}
+				return uint16(100), nil
+			}), nil
+		}),
+	})
+
+	ctx := WithRequestOptions(context.Background(), RequestOptions{})
+	if _, err := client.GetSecurityCount(ctx, model.MarketSH); err == nil {
+		t.Fatal("GetSecurityCount unexpectedly succeeded")
+	}
+	if len(hosts) != 1 || hosts[0] != "bad" {
+		t.Fatalf("hosts = %v, want bad", hosts)
+	}
+}
+
+func TestClientRequestOptionsInvalidRetryNormalizesWithoutMutatingClient(t *testing.T) {
+	var hosts []string
+	client := NewClient(Options{
+		Servers:     []model.Server{{Name: "bad", Host: "bad", Port: 7709}, {Name: "good", Host: "good", Port: 7709}},
+		MaxAttempts: 2,
+		Pool:        PoolOptions{Disable: true},
+		Retry:       RetryOptions{Strategy: RetryStrategySameHostFirst, SameHostAttempts: 2},
+		CircuitBreaker: CircuitBreakerOptions{
+			FailureThreshold: 100,
+			Cooldown:         time.Hour,
+		},
+		Dialer: DialerFunc(func(_ context.Context, server model.Server, _ TransportOptions) (RoundTripper, error) {
+			hosts = append(hosts, server.Name)
+			return roundTripFunc(func(context.Context, command.Command) (any, error) {
+				if server.Name == "bad" {
+					return nil, errors.New("host down")
+				}
+				return uint16(100), nil
+			}), nil
+		}),
+	})
+
+	ctx := WithRequestOptions(context.Background(), RequestOptions{
+		Retry: RetryOptions{Strategy: RetryStrategy("invalid"), SameHostAttempts: 2},
+	})
+	count, err := client.GetSecurityCount(ctx, model.MarketSH)
+	if err != nil {
+		t.Fatalf("GetSecurityCount: %v", err)
+	}
+	if count != 100 {
+		t.Fatalf("count = %d, want 100", count)
+	}
+	if len(hosts) != 2 || hosts[0] != "bad" || hosts[1] != "good" {
+		t.Fatalf("hosts = %v, want bad,good", hosts)
+	}
+	if client.retryStrategy != RetryStrategySameHostFirst || client.sameHostAttempts != 2 {
+		t.Fatalf("client retry mutated to %s/%d", client.retryStrategy, client.sameHostAttempts)
+	}
+}
+
+func TestClientRequestOptionsCloneTimeoutPolicyMaps(t *testing.T) {
+	operationTimeouts := map[string]time.Duration{"security_count": 1200 * time.Millisecond}
+	ctx := WithRequestOptions(context.Background(), RequestOptions{
+		TimeoutPolicy: TimeoutPolicy{OperationTimeouts: operationTimeouts},
+	})
+	operationTimeouts["security_count"] = 5 * time.Second
+	got, ok := RequestOptionsFromContext(ctx)
+	if !ok {
+		t.Fatal("RequestOptionsFromContext returned ok=false")
+	}
+	got.TimeoutPolicy.OperationTimeouts["security_count"] = 5 * time.Second
+
+	var seen time.Duration
+	client := NewClient(Options{
+		Servers: []model.Server{{Name: "fake", Host: "fake", Port: 7709}},
+		TimeoutPolicy: TimeoutPolicy{
+			OperationTimeouts: map[string]time.Duration{"security_count": 3 * time.Second},
+		},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(ctx context.Context, cmd command.Command) (any, error) {
+				deadline, ok := ctx.Deadline()
+				if !ok {
+					t.Fatalf("%s missing deadline", cmd.Operation())
+				}
+				seen = time.Until(deadline)
+				return uint16(100), nil
+			}), nil
+		}),
+	})
+
+	if _, err := client.GetSecurityCount(ctx, model.MarketSH); err != nil {
+		t.Fatalf("GetSecurityCount: %v", err)
+	}
+	if seen <= time.Second || seen > 1500*time.Millisecond {
+		t.Fatalf("timeout = %s, want copied request timeout about 1.2s", seen)
+	}
+}
+
+func TestClientClonesTimeoutPolicyMaps(t *testing.T) {
+	operationTimeouts := map[string]time.Duration{"security_count": 1200 * time.Millisecond}
+	var seen time.Duration
+	client := NewClient(Options{
+		Servers: []model.Server{{Name: "fake", Host: "fake", Port: 7709}},
+		TimeoutPolicy: TimeoutPolicy{
+			OperationTimeouts: operationTimeouts,
+		},
+		Dialer: DialerFunc(func(_ context.Context, _ model.Server, _ TransportOptions) (RoundTripper, error) {
+			return roundTripFunc(func(ctx context.Context, cmd command.Command) (any, error) {
+				deadline, ok := ctx.Deadline()
+				if !ok {
+					t.Fatalf("%s missing deadline", cmd.Operation())
+				}
+				seen = time.Until(deadline)
+				return uint16(100), nil
+			}), nil
+		}),
+	})
+	operationTimeouts["security_count"] = 5 * time.Second
+
+	if _, err := client.GetSecurityCount(context.Background(), model.MarketSH); err != nil {
+		t.Fatalf("GetSecurityCount: %v", err)
+	}
+	if seen <= time.Second || seen > 1500*time.Millisecond {
+		t.Fatalf("timeout = %s, want copied client timeout about 1.2s", seen)
+	}
+}
+
 func TestClientAppliesMarketSpecificTimeoutPolicy(t *testing.T) {
 	var seen []time.Duration
 	client := NewClient(Options{

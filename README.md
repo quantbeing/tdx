@@ -122,6 +122,29 @@ defer client.Close()
 
 组合接口会在内部每个 batch/page/chunk 之间检查父 context。业务侧应给全量列表、资金流、板块和文件下载这类重接口设置外层 `context.WithTimeout`，超时后不会继续调度新的内部请求。
 
+生产默认请求策略应放在 `tdx.Options`，这样所有 API 调用共享同一套 timeout、retry、failover 和观测配置。少量接口需要临时放宽或收紧时，通过 context 覆盖单次请求策略，不需要把 retry 参数塞进每个数据 API：
+
+```go
+ctx = tdx.WithRequestOptions(ctx, tdx.RequestOptions{
+    MaxAttempts: 3,
+    Retry: tdx.RetryOptions{
+        Strategy:         tdx.RetryStrategySameHostFirst,
+        SameHostAttempts: 2,
+    },
+    TimeoutPolicy: tdx.TimeoutPolicy{
+        OperationTimeouts: map[string]time.Duration{
+            "security_count": 1200 * time.Millisecond,
+        },
+    },
+})
+
+count, err := client.GetSecurityCount(ctx, model.MarketSH)
+```
+
+`RequestOptions` 只覆盖非零配置：`MaxAttempts > 0` 才替换 client 默认 attempt 次数；`Retry.Strategy` 非空或 `Retry.SameHostAttempts > 0` 才替换默认 retry 策略，空值/非法策略会归一成 failover-first；`TimeoutPolicy` 按非零项覆盖，未指定的 operation/market 继续继承 client 默认 policy。复合接口的业务预算仍使用 `ListSecuritiesWithOptions`、`GetFundFlowWithOptions`、`GetReportFileWithOptions` 这类 `XxxWithOptions`，context 级覆盖只负责内部单次 command 的请求策略。
+
+`WithRequestOptions` 会防御性拷贝 `TimeoutPolicy` 里的 map；`NewClient` 也会拷贝默认 `TimeoutPolicy`。创建 client 或 context 后，调用方继续修改原始 map 不会改变已保存的请求策略。
+
 ## Markets And Categories
 
 市场：
