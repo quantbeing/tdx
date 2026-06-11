@@ -1,6 +1,20 @@
 # Changelog
 
-## v0.1.2 - Pending
+## Unreleased
+
+### Added
+
+- Experimental `exhq` package for TDX extended-market `7727` protocol research, with offline-tested parsers and client skeleton.
+- Experimental `vipdoc` package for deterministic local `.day` and block `.dat` parsing.
+- Experimental `financepkg` package for `tdxfin/gpcw*.zip` professional financial package parsing and report-file download adapters.
+- `tdx-probe -raw-hex` diagnostic mode for legal/owned-endpoint raw request fixture capture.
+
+### Notes
+
+- These broader ecosystem packages are not part of the stable HQ `7709` API yet; ExHQ still needs live server validation.
+- VIPDOC minute-file parsing remains explicitly unsupported until the local minute record layouts are verified.
+
+## v0.1.2
 
 Tag target for the post-`v0.1.1` hardening work.
 

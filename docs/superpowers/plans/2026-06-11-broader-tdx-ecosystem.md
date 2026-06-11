@@ -10,6 +10,15 @@
 
 ---
 
+## Current Status
+
+- [x] Task 1-3 ExHQ experimental package implemented with offline parser/client tests.
+- [x] Task 4 VIPDOC package implemented for `.day` and block `.dat`; minute parsing is explicit unsupported pending format verification.
+- [x] Task 5 Professional financial package parser/downloader implemented with size limits and hostile fixture tests.
+- [x] Task 6 Raw discovery mode implemented as `tdx-probe -raw-hex`.
+- [x] Task 7 offline validation reports added for ExHQ, VIPDOC, and financepkg.
+- [ ] ExHQ live validation remains pending and must be opt-in.
+
 ## File Structure
 
 - Create `docs/investigations/tdx-broader-ecosystem-research-2026-06-11.md`: research source matrix and track decisions.

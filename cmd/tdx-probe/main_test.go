@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"os"
 	"strings"
 	"testing"
@@ -76,6 +77,38 @@ func TestCommandForOptionsUsesMarketCodeAndCount(t *testing.T) {
 func TestParseSymbolsRejectsInvalidToken(t *testing.T) {
 	_, err := parseSymbols("sh600519")
 	if err == nil || !strings.Contains(err.Error(), "market:code") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCommandForOptionsBuildsRawHexCommand(t *testing.T) {
+	cmd, err := commandForOptions(probeOptions{RawHex: "0c 01 02"})
+	if err != nil {
+		t.Fatalf("commandForOptions: %v", err)
+	}
+	if cmd.Operation() != "raw_probe" {
+		t.Fatalf("operation = %s", cmd.Operation())
+	}
+	request, err := cmd.BuildRequest()
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
+	}
+	if hex.EncodeToString(request) != "0c0102" {
+		t.Fatalf("request = %x", request)
+	}
+	parsed, err := cmd.ParseResponse([]byte{0xaa, 0xbb})
+	if err != nil {
+		t.Fatalf("ParseResponse: %v", err)
+	}
+	body, ok := parsed.([]byte)
+	if !ok || hex.EncodeToString(body) != "aabb" {
+		t.Fatalf("parsed = %#v", parsed)
+	}
+}
+
+func TestCommandForOptionsRejectsInvalidRawHex(t *testing.T) {
+	_, err := commandForOptions(probeOptions{RawHex: "0c zz"})
+	if err == nil || !strings.Contains(err.Error(), "raw-hex") {
 		t.Fatalf("err = %v", err)
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -30,7 +31,9 @@ func main() {
 	var maxAttempts int
 	var retryStrategyRaw string
 	var sameHostAttempts int
+	var rawHex string
 	flag.StringVar(&op, "op", "security-count", "operation: security-count, security-list, stock-bars, index-bars, quote, market-stat, minute, history-minute, transaction, history-transaction, fund-flow, history-fund-flow, finance, xdxr, company, block-meta, block, report")
+	flag.StringVar(&rawHex, "raw-hex", "", "diagnostic-only raw request hex; bypasses known operation builders")
 	flag.StringVar(&market, "market", "sh", "market: sh, sz, bj")
 	flag.StringVar(&code, "code", "", "security code for symbol operations")
 	flag.StringVar(&symbols, "symbols", "", "comma-separated quote symbols as market:code, for example sh:600519,sz:000001")
@@ -64,7 +67,7 @@ func main() {
 
 	cmd, err := commandForOptions(probeOptions{
 		Op: op, Market: market, Code: code, Symbols: symbols,
-		Date: date, Start: start, Count: count, File: file,
+		Date: date, Start: start, Count: count, File: file, RawHex: rawHex,
 	})
 	if err != nil {
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
@@ -113,9 +116,17 @@ type probeOptions struct {
 	Start   int
 	Count   int
 	File    string
+	RawHex  string
 }
 
 func commandForOptions(opts probeOptions) (command.Command, error) {
+	if strings.TrimSpace(opts.RawHex) != "" {
+		request, err := parseRawHex(opts.RawHex)
+		if err != nil {
+			return nil, err
+		}
+		return rawProbeCommand{Request: request}, nil
+	}
 	market := parseMarket(opts.Market)
 	code := defaultCode(opts.Code, market)
 	count := opts.Count
@@ -186,6 +197,49 @@ func commandForOptions(opts probeOptions) (command.Command, error) {
 	default:
 		return command.NewSecurityCountCommand(market), nil
 	}
+}
+
+type rawProbeCommand struct {
+	Request []byte
+}
+
+func (c rawProbeCommand) BuildRequest() ([]byte, error) {
+	out := make([]byte, len(c.Request))
+	copy(out, c.Request)
+	return out, nil
+}
+
+func (c rawProbeCommand) ParseResponse(body []byte) (any, error) {
+	out := make([]byte, len(body))
+	copy(out, body)
+	return out, nil
+}
+
+func (c rawProbeCommand) Operation() string {
+	return "raw_probe"
+}
+
+func parseRawHex(raw string) ([]byte, error) {
+	normalized := strings.NewReplacer(
+		"0x", "",
+		"0X", "",
+		" ", "",
+		"\n", "",
+		"\t", "",
+		",", "",
+		"_", "",
+	).Replace(strings.TrimSpace(raw))
+	if normalized == "" {
+		return nil, fmt.Errorf("raw-hex cannot be empty")
+	}
+	if len(normalized)%2 != 0 {
+		return nil, fmt.Errorf("raw-hex must contain an even number of hex digits")
+	}
+	out, err := hex.DecodeString(normalized)
+	if err != nil {
+		return nil, fmt.Errorf("raw-hex decode: %w", err)
+	}
+	return out, nil
 }
 
 func commandFor(op string, market model.Market) command.Command {

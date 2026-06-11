@@ -62,6 +62,16 @@ func main() {
 
 默认配置会使用内置通达信公网服务器种子、每 host 1 条 idle 连接、请求级 host failover、operation-aware 熔断冷却。
 
+## Experimental Packages
+
+这些包服务于更广义的 TDX 生态，当前是 experimental，不影响稳定的 HQ `7709` 主 API：
+
+| Package | 用途 | 当前边界 |
+|---|---|---|
+| `github.com/quantbeing/tdx/exhq` | 扩展行情 `7727`：market、instrument、quote、K 线、分时、逐笔等 offline-tested parser/client skeleton。 | 尚未做公网 ExHQ live 验证。 |
+| `github.com/quantbeing/tdx/vipdoc` | 本地 TDX `vipdoc` 文件：`.day` 日线和 block `.dat` 板块文件解析。 | 1/5 分钟本地文件格式未确认，明确返回 unsupported。 |
+| `github.com/quantbeing/tdx/financepkg` | `tdxfin/gpcw*.zip` 专业财务包解析和 report-file 下载适配。 | 字段名暂以 `FieldN`/`[]float32` 保守暴露，未内置财务字段字典。 |
+
 ## Client Options
 
 ```go
@@ -512,6 +522,7 @@ go run ./cmd/tdx-probe -op quote -symbols sh:600519,sz:000001 -capture-dir ./fix
 go run ./cmd/tdx-probe -op minute -market sh -code 600519 -capture-dir ./fixtures/live
 go run ./cmd/tdx-probe -op history-transaction -market sh -code 600519 -date 20240607 -count 50 -capture-dir ./fixtures/live
 go run ./cmd/tdx-probe -op report -file base_info.zip -count 30000 -capture-dir ./fixtures/live
+go run ./cmd/tdx-probe -raw-hex '0c 0c 18 6c 00 01 08 00 08 00 4e 04 01 00 00 00 00 00' -capture-dir ./fixtures/raw
 ```
 
 支持的 `-op`：
@@ -547,6 +558,7 @@ report
 | `-date 20240607` | 历史分时、历史逐笔等历史 command 的交易日。 |
 | `-start 0` / `-count 50` | 分页或 chunk command 的起点和数量。 |
 | `-file base_info.zip` | 板块、报表文件 command 的文件名。 |
+| `-raw-hex` | 诊断专用 raw request hex，绕过已知 operation builder；只用于自有/合法环境下的协议反推，不属于稳定 API。 |
 | `-max-attempts 2` | 单次 command 的最多 attempt 次数；0 使用 client 默认。 |
 | `-retry-strategy failover-first|same-host-first` | 公网节点排障通常用 failover-first，私有节点瞬时抖动可试 same-host-first。 |
 | `-same-host-attempts 2` | same-host-first 下同一 host 连续尝试次数。 |

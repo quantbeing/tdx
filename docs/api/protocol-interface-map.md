@@ -50,6 +50,12 @@ type command.Command interface {
 
 `tcpRoundTripper.RoundTrip` returns only `CapturedResponse.Parsed`.
 
+### Diagnostic Raw Probe
+
+`tdx-probe -raw-hex <hex> -capture-dir <dir>` can send a caller-supplied raw request payload and preserve the response as a fixture with operation `raw_probe`.
+
+This mode is diagnostic-only. It is intended for legally permitted protocol research on owned or explicitly authorized endpoints. It bypasses typed command builders, returns decoded body bytes without field parsing, and is not part of the stable public API.
+
 ### Response Header
 
 TDX responses use a fixed 16-byte little-endian header:
