@@ -12,6 +12,7 @@ import (
 
 	tdx "github.com/quantbeing/tdx"
 	"github.com/quantbeing/tdx/diagnostic"
+	"github.com/quantbeing/tdx/internal/cmdflags"
 )
 
 func main() {
@@ -57,7 +58,7 @@ func run(args []string, stdout io.Writer, capturer diagnostic.Capturer, getenv f
 		client := tdx.NewClient(clientOpts)
 		defer client.Close()
 		capturer = client
-	} else if _, err := parseRetryStrategy(retryStrategyRaw); err != nil {
+	} else if _, err := cmdflags.ParseRetryStrategy(retryStrategyRaw); err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -73,29 +74,15 @@ func run(args []string, stdout io.Writer, capturer diagnostic.Capturer, getenv f
 }
 
 func buildClientOptions(timeout time.Duration, maxAttempts int, retryStrategyRaw string, sameHostAttempts int) (tdx.Options, error) {
-	retryStrategy, err := parseRetryStrategy(retryStrategyRaw)
+	retry, err := cmdflags.RetryOptions(retryStrategyRaw, sameHostAttempts)
 	if err != nil {
 		return tdx.Options{}, err
 	}
 	return tdx.Options{
 		Timeout:     timeout,
 		MaxAttempts: maxAttempts,
-		Retry: tdx.RetryOptions{
-			Strategy:         retryStrategy,
-			SameHostAttempts: sameHostAttempts,
-		},
+		Retry:       retry,
 	}, nil
-}
-
-func parseRetryStrategy(raw string) (tdx.RetryStrategy, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "failover-first", "failover_first", "failover":
-		return tdx.RetryStrategyFailoverFirst, nil
-	case "same-host-first", "same_host_first", "same-host":
-		return tdx.RetryStrategySameHostFirst, nil
-	default:
-		return "", fmt.Errorf("unknown retry strategy %q", raw)
-	}
 }
 
 func splitOps(raw string) []string {

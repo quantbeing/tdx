@@ -11,6 +11,7 @@ import (
 	"time"
 
 	tdx "github.com/quantbeing/tdx"
+	"github.com/quantbeing/tdx/internal/cmdflags"
 	"github.com/quantbeing/tdx/model"
 	"github.com/quantbeing/tdx/validation"
 )
@@ -136,34 +137,20 @@ func buildClientOptions(_ time.Duration, operationTimeout time.Duration, connect
 	if connectTimeout <= 0 || connectTimeout > operationTimeout {
 		connectTimeout = operationTimeout
 	}
-	retryStrategy, err := parseRetryStrategy(retryStrategyRaw)
+	retry, err := cmdflags.RetryOptions(retryStrategyRaw, sameHostAttempts)
 	if err != nil {
 		return tdx.Options{}, err
 	}
 	return tdx.Options{
 		MaxAttempts: maxAttempts,
 		Timeout:     operationTimeout,
-		Retry: tdx.RetryOptions{
-			Strategy:         retryStrategy,
-			SameHostAttempts: sameHostAttempts,
-		},
+		Retry:       retry,
 		Transport: tdx.TransportOptions{
 			ConnectTimeout: connectTimeout,
 			WriteTimeout:   connectTimeout,
 			ReadTimeout:    operationTimeout,
 		},
 	}, nil
-}
-
-func parseRetryStrategy(raw string) (tdx.RetryStrategy, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "failover-first", "failover_first", "failover":
-		return tdx.RetryStrategyFailoverFirst, nil
-	case "same-host-first", "same_host_first", "same-host":
-		return tdx.RetryStrategySameHostFirst, nil
-	default:
-		return "", fmt.Errorf("unknown retry strategy %q", raw)
-	}
 }
 
 func parseMarkets(raw string) ([]model.Market, error) {

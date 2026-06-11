@@ -79,30 +79,3 @@ func TestParseSymbolsRejectsInvalidToken(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
-
-func TestParseRetryStrategyAliases(t *testing.T) {
-	tests := map[string]tdx.RetryStrategy{
-		"failover-first":  tdx.RetryStrategyFailoverFirst,
-		"failover_first":  tdx.RetryStrategyFailoverFirst,
-		"failover":        tdx.RetryStrategyFailoverFirst,
-		"same-host-first": tdx.RetryStrategySameHostFirst,
-		"same_host_first": tdx.RetryStrategySameHostFirst,
-		"same-host":       tdx.RetryStrategySameHostFirst,
-	}
-	for raw, want := range tests {
-		got, err := parseRetryStrategy(raw)
-		if err != nil {
-			t.Fatalf("parseRetryStrategy(%q): %v", raw, err)
-		}
-		if got != want {
-			t.Fatalf("parseRetryStrategy(%q) = %q, want %q", raw, got, want)
-		}
-	}
-}
-
-func TestParseRetryStrategyRejectsUnknown(t *testing.T) {
-	_, err := parseRetryStrategy("sticky")
-	if err == nil || !strings.Contains(err.Error(), "unknown retry strategy") {
-		t.Fatalf("err = %v", err)
-	}
-}

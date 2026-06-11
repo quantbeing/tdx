@@ -12,6 +12,7 @@ import (
 	tdx "github.com/quantbeing/tdx"
 	"github.com/quantbeing/tdx/command"
 	"github.com/quantbeing/tdx/diagnostic"
+	"github.com/quantbeing/tdx/internal/cmdflags"
 	"github.com/quantbeing/tdx/model"
 )
 
@@ -44,7 +45,7 @@ func main() {
 	flag.IntVar(&sameHostAttempts, "same-host-attempts", 1, "same-host attempts for same-host-first retry strategy")
 	flag.Parse()
 
-	retryStrategy, err := parseRetryStrategy(retryStrategyRaw)
+	retry, err := cmdflags.RetryOptions(retryStrategyRaw, sameHostAttempts)
 	if err != nil {
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
 			"operation": op,
@@ -56,10 +57,7 @@ func main() {
 	client := tdx.NewClient(tdx.Options{
 		Timeout:     timeout,
 		MaxAttempts: maxAttempts,
-		Retry: tdx.RetryOptions{
-			Strategy:         retryStrategy,
-			SameHostAttempts: sameHostAttempts,
-		},
+		Retry:       retry,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -234,17 +232,6 @@ func parseSymbols(raw string) ([]model.Symbol, error) {
 		}
 	}
 	return out, nil
-}
-
-func parseRetryStrategy(raw string) (tdx.RetryStrategy, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "failover-first", "failover_first", "failover":
-		return tdx.RetryStrategyFailoverFirst, nil
-	case "same-host-first", "same_host_first", "same-host":
-		return tdx.RetryStrategySameHostFirst, nil
-	default:
-		return "", fmt.Errorf("unknown retry strategy %q", raw)
-	}
 }
 
 func defaultCode(code string, market model.Market) string {

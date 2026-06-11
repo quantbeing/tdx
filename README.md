@@ -25,6 +25,12 @@ go get github.com/quantbeing/tdx
 replace github.com/quantbeing/tdx => /Users/liuhanqing01/projects/tdx
 ```
 
+更完整的接入入口：
+
+- 可复制示例见 [examples](./examples)，包含公网 quickstart 和私有节点 retry policy。
+- 版本变化见 [CHANGELOG.md](./CHANGELOG.md)。
+- 离线可运行的 package examples 可用 `go test .` 验证，不依赖公网 TDX 节点。
+
 ## Quick Start
 
 ```go
